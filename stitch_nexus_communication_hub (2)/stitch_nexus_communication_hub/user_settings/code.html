@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#004d44",
+                        "surface-bright": "#38393c",
+                        "outline": "#988d9f",
+                        "on-primary-fixed": "#2c0051",
+                        "on-error": "#690005",
+                        "secondary": "#44e2cd",
+                        "secondary-fixed-dim": "#3cddc7",
+                        "tertiary-container": "#ff516a",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-surface": "#e3e2e6",
+                        "surface-container-high": "#292a2d",
+                        "outline-variant": "#4d4354",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "on-primary-fixed-variant": "#6900b3",
+                        "tertiary-fixed": "#ffdadb",
+                        "on-secondary-fixed-variant": "#005047",
+                        "surface-container": "#1f1f23",
+                        "surface-dim": "#121316",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e3e2e6",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-low": "#1a1b1e",
+                        "on-primary": "#490080",
+                        "on-secondary-fixed": "#00201c",
+                        "on-secondary": "#003731",
+                        "surface": "#121316",
+                        "tertiary": "#ffb2b7",
+                        "background": "#121316",
+                        "on-tertiary": "#67001b",
+                        "primary-container": "#b76dff",
+                        "surface-container-highest": "#343538",
+                        "inverse-surface": "#e3e2e6",
+                        "primary-fixed-dim": "#ddb7ff",
+                        "error": "#ffb4ab",
+                        "primary": "#ddb7ff",
+                        "on-tertiary-fixed": "#40000d",
+                        "surface-variant": "#343538",
+                        "error-container": "#93000a",
+                        "secondary-container": "#03c6b2",
+                        "primary-fixed": "#f0dbff",
+                        "on-tertiary-container": "#5b0017",
+                        "surface-container-lowest": "#0d0e11",
+                        "on-surface-variant": "#cfc2d6",
+                        "inverse-on-surface": "#2f3033",
+                        "on-primary-container": "#400071",
+                        "surface-tint": "#ddb7ff",
+                        "secondary-fixed": "#62fae3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "server-rail-width": "72px",
+                        "member-list-width": "240px",
+                        "stack-lg": "16px",
+                        "stack-sm": "4px",
+                        "sidebar-width": "240px",
+                        "stack-md": "8px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Geist"],
+                        "display-sm": ["Geist"],
+                        "label-md": ["Geist"],
+                        "chat-text": ["Inter"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "display-sm": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "chat-text": ["15px", {"lineHeight": "1.5", "letterSpacing": "0px", "fontWeight": "400"}],
+                        "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "body-md": ["15px", {"lineHeight": "22px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex selection:bg-primary-container selection:text-on-primary-container">
+<!-- OVERLAY BACKGROUND -->
+<div class="fixed inset-0 bg-background/80 backdrop-blur-md z-[100] flex">
+<!-- MAIN WRAPPER -->
+<div class="flex w-full max-w-[1280px] mx-auto h-full bg-surface-container relative">
+<!-- CLOSE BUTTON -->
+<button class="absolute top-8 right-8 w-10 h-10 flex items-center justify-center rounded-full border border-outline-variant/30 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors z-[110]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+<!-- LEFT SIDEBAR (SETTINGS NAV) -->
+<div class="w-[280px] flex-shrink-0 bg-surface-container-low border-r border-outline-variant/10 py-16 px-4 flex flex-col gap-8 h-full overflow-y-auto">
+<!-- USER SETTINGS -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant mb-3 px-2 uppercase tracking-wider">User Settings</h3>
+<nav class="flex flex-col gap-1">
+<!-- Active Item -->
+<button class="flex items-center gap-3 px-3 py-2 rounded bg-surface-container-highest text-on-surface font-semibold relative before:content-[''] before:absolute before:left-0 before:w-1 before:h-4 before:bg-primary before:rounded-full">
+<span class="material-symbols-outlined text-[20px]">account_circle</span>
+                            My Account
+                        </button>
+<!-- Inactive Items -->
+<button class="flex items-center gap-3 px-3 py-2 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150">
+<span class="material-symbols-outlined text-[20px]">badge</span>
+                            Profiles
+                        </button>
+<button class="flex items-center gap-3 px-3 py-2 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+                            Privacy &amp; Safety
+                        </button>
+</nav>
+</div>
+<!-- APP SETTINGS -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant mb-3 px-2 uppercase tracking-wider">App Settings</h3>
+<nav class="flex flex-col gap-1">
+<button class="flex items-center gap-3 px-3 py-2 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150">
+<span class="material-symbols-outlined text-[20px]">palette</span>
+                            Appearance
+                        </button>
+<button class="flex items-center gap-3 px-3 py-2 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150">
+<span class="material-symbols-outlined text-[20px]">accessibility_new</span>
+                            Accessibility
+                        </button>
+<button class="flex items-center gap-3 px-3 py-2 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+                            Voice &amp; Video
+                        </button>
+</nav>
+</div>
+</div>
+<!-- CENTER CONTENT AREA -->
+<div class="flex-1 py-16 px-12 overflow-y-auto">
+<div class="max-w-[720px]">
+<h1 class="font-display-sm text-display-sm text-on-surface mb-8">My Account</h1>
+<!-- PROFILE PREVIEW CARD (Bento Style) -->
+<div class="bg-surface-container-high rounded-xl overflow-hidden mb-8 border border-outline-variant/20 relative">
+<!-- Banner -->
+<div class="h-32 w-full relative" data-alt="A sleek, abstract digital banner featuring deep obsidian and amethyst hues, with subtle geometric glassmorphism patterns and glowing neon purple accents in a high-tech gaming aesthetic. The mood is dark, mysterious, and highly refined." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCLznJ0z9tQctJNZbnaTwBF3hrJCEZt83U5UnSs4JS_fzxIUGzsphZHL7W7f6Y0m7gZiwT5I8W3SqeiBufhW4GFSHC3KeDehD9frL_vKH7oQj3_VUegokHwIbB5dB85gvxbYV5eJFlIugFMRDH8l-xkTHblT4IOF5EUderpOnQ8jEh7RwW95yeWo_rpi4yqEwCyVViWgrBLDDc2CuRp5BmoQ0PHctHYktEkNBYNUVovi-YI1C7g0Jtv')">
+<button class="absolute top-3 right-3 bg-background/60 hover:bg-background/90 backdrop-blur text-on-surface w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+</div>
+<!-- Profile Info Area -->
+<div class="p-6 pt-12 relative flex justify-between items-start">
+<!-- Avatar Overlap -->
+<div class="absolute -top-10 left-6">
+<div class="relative w-20 h-20 rounded-full border-[6px] border-surface-container-high bg-surface-container-lowest overflow-hidden group cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A striking minimalist digital avatar featuring a stylized sci-fi helmet rendered in deep purple and dark grey tones. The background is a clean gradient. The aesthetic is modern, clean, and highly technical, perfect for a professional gaming or developer profile." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDd0BkT_ohKAHGnzVsdD3SOey4E2MVK9baXbzM1Zq6BLwf_DM68Jd--ktoLOJKx8JGNUHqQ4YvEF54N2b2RFk3G6XTFEQd0cC1WmH3GzzvV4EYWwwXHiJgggEeTOKLO2xZwzf8c9yHsw05Y1LEyIJAS7Q1MzU98PDVtDLifFOnFSy4-qrZT2AQectNxrBwyVpU_nh_kkuibjIh1uwdFd7Hno05GgLyrnGp0bHNwyIR_gwhjNjRxIMhi"/>
+<div class="absolute inset-0 bg-black/50 hidden group-hover:flex items-center justify-center transition-all">
+<span class="material-symbols-outlined text-white text-[24px]">add_photo_alternate</span>
+</div>
+<!-- Status dot -->
+<div class="absolute bottom-1 right-1 w-4 h-4 bg-secondary rounded-full border-2 border-surface-container-high z-10"></div>
+</div>
+</div>
+<div class="mt-4 w-full">
+<div class="flex justify-between items-center bg-surface-container rounded-lg p-4 mb-4 border border-outline-variant/10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Display Name</p>
+<p class="font-headline-sm text-headline-sm text-on-surface">TechRefined</p>
+</div>
+<button class="bg-[#404249] hover:bg-[#4F545C] text-white px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Edit</button>
+</div>
+<div class="flex justify-between items-center bg-surface-container rounded-lg p-4 mb-4 border border-outline-variant/10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Username</p>
+<p class="font-headline-sm text-headline-sm text-on-surface">tech.refined</p>
+</div>
+<button class="bg-[#404249] hover:bg-[#4F545C] text-white px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Edit</button>
+</div>
+<div class="flex justify-between items-center bg-surface-container rounded-lg p-4 border border-outline-variant/10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Email</p>
+<p class="font-headline-sm text-headline-sm text-on-surface">user@example.com</p>
+</div>
+<button class="bg-[#404249] hover:bg-[#4F545C] text-white px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Edit</button>
+</div>
+</div>
+</div>
+</div>
+<!-- PASSWORD & AUTHENTICATION -->
+<div class="mb-12">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4">Password and Authentication</h2>
+<div class="bg-surface-container-high rounded-xl p-6 border border-outline-variant/20">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">password</span>
+</div>
+<div>
+<p class="font-headline-sm text-headline-sm text-on-surface">Password</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Last changed 3 months ago</p>
+</div>
+</div>
+<button class="bg-[#A855F7] hover:bg-primary-container hover:text-on-primary-container text-white px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Change Password</button>
+</div>
+<hr class="border-outline-variant/20 my-6"/>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-secondary/20 text-secondary flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+<div>
+<p class="font-headline-sm text-headline-sm text-on-surface">Two-Factor Authentication</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Protect your account with an extra layer of security.</p>
+</div>
+</div>
+<button class="bg-transparent border border-primary text-primary hover:bg-primary/10 px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Enable 2FA</button>
+</div>
+</div>
+</div>
+<!-- DANGER ZONE -->
+<div>
+<h2 class="font-headline-md text-headline-md text-error mb-4">Account Removal</h2>
+<div class="bg-error/5 border border-error/20 rounded-xl p-6">
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-4">Disabling your account means you can recover it at any time after taking this action.</p>
+<div class="flex gap-4">
+<button class="bg-transparent border border-error text-error hover:bg-error/10 px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Disable Account</button>
+<button class="bg-transparent border border-error text-error hover:bg-error/10 px-4 py-2 rounded font-body-sm text-body-sm transition-colors">Delete Account</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body></html>

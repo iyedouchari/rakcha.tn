@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rakcha - Discord Alternative</title>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "#0B0E14",
+              foreground: "#e3e2e6",
+              surface: "#121316",
+              "surface-bright": "#38393c",
+              "surface-container-lowest": "#0d0e11",
+              "surface-container-low": "#151921",
+              "surface-container": "#1f1f23",
+              "surface-container-high": "#1F2430",
+              "surface-container-highest": "#2A2F3D",
+              primary: "#6366F1",
+              "primary-foreground": "#ffffff",
+              secondary: "#06B6D4",
+              muted: "#1F2430",
+              "muted-foreground": "#988d9f",
+              "outline-variant": "#4d4354"
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              heading: ["Geist", "sans-serif"],
+            }
+          }
+        }
+      }
+    </script>
+    <style type="text/tailwindcss">
+      @layer base {
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { @apply bg-surface-container-highest rounded-full; }
+        ::-webkit-scrollbar-thumb:hover { @apply bg-surface-bright; }
+      }
+    </style>
+  </head>
+  <body class="bg-background text-foreground font-sans antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

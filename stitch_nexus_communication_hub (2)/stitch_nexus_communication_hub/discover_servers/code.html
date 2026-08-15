@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Discover Servers - TechRefined</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Geist:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-container": "#004d44",
+                        "surface-bright": "#38393c",
+                        "outline": "#988d9f",
+                        "on-primary-fixed": "#2c0051",
+                        "on-error": "#690005",
+                        "secondary": "#44e2cd",
+                        "secondary-fixed-dim": "#3cddc7",
+                        "tertiary-container": "#ff516a",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-surface": "#e3e2e6",
+                        "surface-container-high": "#292a2d",
+                        "outline-variant": "#4d4354",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "on-primary-fixed-variant": "#6900b3",
+                        "tertiary-fixed": "#ffdadb",
+                        "on-secondary-fixed-variant": "#005047",
+                        "surface-container": "#1f1f23",
+                        "surface-dim": "#121316",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e3e2e6",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-low": "#1a1b1e",
+                        "on-primary": "#490080",
+                        "on-secondary-fixed": "#00201c",
+                        "on-secondary": "#003731",
+                        "surface": "#121316",
+                        "tertiary": "#ffb2b7",
+                        "background": "#121316",
+                        "on-tertiary": "#67001b",
+                        "primary-container": "#b76dff",
+                        "surface-container-highest": "#343538",
+                        "inverse-surface": "#e3e2e6",
+                        "primary-fixed-dim": "#ddb7ff",
+                        "error": "#ffb4ab",
+                        "primary": "#ddb7ff",
+                        "on-tertiary-fixed": "#40000d",
+                        "surface-variant": "#343538",
+                        "error-container": "#93000a",
+                        "secondary-container": "#03c6b2",
+                        "primary-fixed": "#f0dbff",
+                        "on-tertiary-container": "#5b0017",
+                        "surface-container-lowest": "#0d0e11",
+                        "on-surface-variant": "#cfc2d6",
+                        "inverse-on-surface": "#2f3033",
+                        "on-primary-container": "#400071",
+                        "surface-tint": "#ddb7ff",
+                        "secondary-fixed": "#62fae3"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "server-rail-width": "72px",
+                        "member-list-width": "240px",
+                        "stack-lg": "16px",
+                        "stack-sm": "4px",
+                        "sidebar-width": "240px",
+                        "stack-md": "8px",
+                        "gutter": "16px"
+                    },
+                    fontFamily: {
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Geist"],
+                        "display-sm": ["Geist"],
+                        "label-md": ["Geist"],
+                        "chat-text": ["Inter"],
+                        "headline-sm": ["Geist"],
+                        "body-md": ["Inter"]
+                    },
+                    fontSize: {
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-sm": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "chat-text": ["15px", { "lineHeight": "1.5", "letterSpacing": "0px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .icon-fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #292a2d;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #343538;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-sm overflow-hidden flex h-screen w-screen selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar (Server Rail) -->
+<nav class="fixed left-0 top-0 h-full w-[72px] flex flex-col items-center z-50 bg-surface-container-lowest py-4">
+<div class="flex flex-col gap-2 flex-grow w-full items-center">
+<button aria-label="Home" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined icon-fill">home</span>
+</button>
+<div class="w-8 h-0.5 bg-surface-container-highest rounded-full my-1"></div>
+<button aria-label="Gaming Community" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined">sports_esports</span>
+</button>
+<button aria-label="Design Hub" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined">palette</span>
+</button>
+<button aria-label="Dev Squad" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined">code</span>
+</button>
+<button aria-label="Add Server" class="relative flex items-center justify-center bg-primary text-on-primary rounded-xl w-12 h-12 before:content-[''] before:absolute before:-left-3 before:w-1 before:h-8 before:bg-primary before:rounded-r-full transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined icon-fill">explore</span>
+</button>
+<button aria-label="Add Server" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-[#2DD4BF] hover:text-[#003731] transition-all duration-200 scale-95 active:scale-90 mt-2">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<div class="flex flex-col gap-2 mt-auto">
+<button aria-label="Download" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined">download</span>
+</button>
+<button aria-label="Settings" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-[72px] flex-1 flex h-full overflow-hidden bg-surface">
+<!-- Sidebar Filter (Fixed) -->
+<aside class="w-[240px] h-full flex flex-col bg-surface-container-low border-r border-outline-variant/10 shrink-0">
+<div class="p-6">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-6">Discover</h2>
+<nav class="flex flex-col gap-1">
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-container-highest text-on-surface font-semibold w-full text-left transition-colors">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-body-md text-body-md">Home</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left transition-colors">
+<span class="material-symbols-outlined">sports_esports</span>
+<span class="font-body-md text-body-md">Gaming</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left transition-colors">
+<span class="material-symbols-outlined">music_note</span>
+<span class="font-body-md text-body-md">Music</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left transition-colors">
+<span class="material-symbols-outlined">school</span>
+<span class="font-body-md text-body-md">Education</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left transition-colors">
+<span class="material-symbols-outlined">science</span>
+<span class="font-body-md text-body-md">Science &amp; Tech</span>
+</button>
+<button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left transition-colors">
+<span class="material-symbols-outlined">movie</span>
+<span class="font-body-md text-body-md">Entertainment</span>
+</button>
+</nav>
+</div>
+</aside>
+<!-- Scrollable Content Canvas -->
+<div class="flex-1 overflow-y-auto bg-surface relative scroll-smooth">
+<!-- Hero Section -->
+<section class="relative w-full h-[320px] flex items-center justify-center overflow-hidden bg-surface-container-high">
+<div class="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-luminosity" data-alt="A sweeping, abstract digital landscape resembling a futuristic network cosmos. Dark background with glowing neon purple and cyan geometric lines intersecting. Glassmorphism elements float in space. The mood is high-tech, welcoming, and expansive, fitting a community hub." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC1FulbMdvlQO1mrOUXfIB2xgaitgjA90zZlbrgseStvp7WD2UwmFRHdG5cBbUo98PVROPo37sBynY5dawEvh7Hota3lE7TjGT0kreyNrIwa-xRqtcTbvbQmuNwrHetArY6Lkd8T1Tyoqzkw-6qMgEo7RaWKZtAehSjfV5eB84rmD1jyWK1by2NVCIDEkpKG_ezYmaExojE3X-n8ctic-P4UPCcms54jPkjhAvE7c8OeUCBddbHwVZF')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent"></div>
+<div class="relative z-10 w-full max-w-3xl px-8 text-center flex flex-col items-center">
+<h1 class="font-display-sm text-display-sm text-on-surface mb-6 drop-shadow-lg">Find your community on Obsidian Flux</h1>
+<div class="w-full relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline-variant group-focus-within:text-primary transition-colors">search</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-surface-container-lowest/80 backdrop-blur-md border border-outline-variant/30 rounded-xl font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-lg transition-all" placeholder="Explore gaming, music, tech and more..." type="text"/>
+<button class="absolute inset-y-2 right-2 px-4 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-fixed-dim transition-colors">Search</button>
+</div>
+</div>
+</section>
+<!-- Featured Communities Grid -->
+<section class="p-8 max-w-7xl mx-auto">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6">Featured Communities</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+<!-- Card 1 -->
+<div class="group bg-surface-container rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col h-[320px]">
+<div class="h-32 w-full relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A dynamic, high-contrast banner image for a gaming server. Features abstract glowing neon lines, a stylized game controller, and deep dark background. High-tech, energetic mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2F_luwZmXaS4gYDLeK9_i7FO40uXJ6olAJ8xkyW8u8MXqHj9e3gQ6XZZFRwi44de5ENuo13NGUfYr_0jRccGtx4YWNd_TYa-hdMcdRAyH6uafVVnpoFSsMTuOcX1yGCr4qQ5UiTfjFG94SIvR-S7HpGcFQ7O8ZRMf4F0LQQ-nV1klPTo4uXTi4m5sFpZE0VQyBYW247Gt4Q0x9AfLc6XrE9oGr8Eivk9MR-lvdpC6uEd_ZiV1Kq06"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent opacity-80"></div>
+<div class="absolute -bottom-6 left-4 p-1 bg-surface-container rounded-2xl">
+<img class="w-14 h-14 rounded-xl object-cover" data-alt="A sleek, minimalist avatar icon for a gaming community. A stylized neon green pixel art sword on a dark grey background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBE3Fk5Lh8uVFdRUV-b5PglSQQ7l7lQGWMW4QC9DTXwhUjYxuSq0X8w2XaHFoQxbyDXK1AcAbZTuO4v40JFFKOeHblopVht81hoOeNUKGr1ltIrl55uS3sJMHjuoiyFkyrfhAtgq5tVo4587zjeWN7LFl3lc9elBTkI9N08db97eaPk32qJ_pt-dGa5o14snewPDvf_u0p47HtUR_lLuNer5n5PkpMTrox15xux5Mpo5vb5hWaEkZWb"/>
+</div>
+</div>
+<div class="p-4 pt-8 flex flex-col flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-sm icon-fill" title="Verified">check_circle</span>
+                                    NextGen Gamers
+                                </h4>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-3 mb-4">The premier community for competitive and casual gaming alike. Join us for tournaments, LFG, and chill voice chats.</p>
+<div class="mt-auto flex items-center gap-4 text-on-surface-variant opacity-80">
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-[#2DD4BF]"></div>
+<span class="font-label-md text-label-md">12,401 Online</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<span class="font-label-md text-label-md">45,190 Members</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group bg-surface-container rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col h-[320px]">
+<div class="h-32 w-full relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A sleek, dark-mode banner for a programming community. Abstract glowing code snippets and geometric circuitry patterns in deep purple and blue. Professional, technical aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATUhszXgZsbXIlJggE6C17pQg4psAxqzEE9WUh3t6JgMrwK9atZjvPX05ZHj_jG78WV7qYLnLWoMwoOw9h5yhFVpa0PqETWNz7-UeqRJ-YQijfMis7A2fiidFn0khB9ZuZVUlKAuOaRraFB0iD1qAchClYiAO-1l78R4B-0xfFiPZt0Evdl7RJONWbBujZmT9IdWNLaxreaGygePYyFJTmYlAmmgwHM9e469tWEK4fX1aCEtbKJOw9"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent opacity-80"></div>
+<div class="absolute -bottom-6 left-4 p-1 bg-surface-container rounded-2xl">
+<img class="w-14 h-14 rounded-xl object-cover" data-alt="A clean, modern avatar icon for a developer hub. A stylized minimal terminal prompt or bracket symbol in bright purple on a dark background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcP-gvKy8V5HEDZw0nn0Ek-sDgG-5bMz03kaNn7arZGNrnLzlvmMDmWAX6IUHR0Fz828XM_b38-7w9uC6N5GaRhdpnyPbn-087edD25bLhv5dz2sqYEPBUJ5cyHB6DfNTLgXmmH4Ld2G3UXB9RkHiEtNh2hNTjOxb200ZZHwi1sEPeXPUky_iv-JHofI3zcXwC7oNdQPCZmKzzBb7uUmbdfydAFPK87N9ciSWxfv4jYEr3Dte5qkCP"/>
+</div>
+</div>
+<div class="p-4 pt-8 flex flex-col flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-secondary text-sm icon-fill" title="Verified">check_circle</span>
+                                    Dev/Null
+                                </h4>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-3 mb-4">A global collective of software engineers, designers, and tech enthusiasts. Discuss web dev, systems programming, and share projects.</p>
+<div class="mt-auto flex items-center gap-4 text-on-surface-variant opacity-80">
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-[#2DD4BF]"></div>
+<span class="font-label-md text-label-md">8,932 Online</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<span class="font-label-md text-label-md">112,005 Members</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group bg-surface-container rounded-xl overflow-hidden border border-outline-variant/20 hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer flex flex-col h-[320px]">
+<div class="h-32 w-full relative">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A moody, atmospheric banner for a music community. Abstract visualizations of sound waves in vibrant magenta and cyan over a very dark, smoky background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9fBJOakoXHefYtu3YG6Yi2U7v3E6glRZOakOp4aS8ezXIGs0CRKvUEdJtQvBA6tVRXvng-_uXMqmPckhLcem7Gk0uOSa-zhnuCLnEVslMlSPr1dPubx0aTFldAIfKGcuG6vvxOHW9X3uMhyQnr8FxcQjleD-FqUBad0NFu6TS6ZYFaYOvGuM5izJzDbEreXqCBrugHqJaezNGvJ-kDjgfmOkHZGy2VoM6MonyrTHyAybDUvyb3b-U"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container to-transparent opacity-80"></div>
+<div class="absolute -bottom-6 left-4 p-1 bg-surface-container rounded-2xl">
+<img class="w-14 h-14 rounded-xl object-cover" data-alt="An elegant avatar icon for a music production server. A stylized neon pink synthesizer waveform on a pure black squircle background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDq5QDSZPToU1yyZ9uG7QfArC59mrrme4608_MiathsljiE-pdrVN7hE3cBT9HCV3mrcR21jBiprNe03cQOFScdt6HZhND0Y9pqJ-caEABfGNEC7L1Xc4cuxTVR509_EHkZ6zLOXOgNXb_FyQsomKHjqKsLuc677kVILn6tMRNHGanEeIe7TEx-sqgNOqNBfFF7tL_QssA5ueKnGdh1sLry_Tf-00Wc3tenV018kGVsYSFsYmfWkkY1"/>
+</div>
+</div>
+<div class="p-4 pt-8 flex flex-col flex-grow">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-headline-sm text-headline-sm text-on-surface flex items-center gap-1">
+                                    Synthwave Studio
+                                </h4>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-3 mb-4">Share your tracks, get feedback, and collaborate with producers around the world. All genres welcome.</p>
+<div class="mt-auto flex items-center gap-4 text-on-surface-variant opacity-80">
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-[#2DD4BF]"></div>
+<span class="font-label-md text-label-md">3,120 Online</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2 h-2 rounded-full bg-outline-variant"></div>
+<span class="font-label-md text-label-md">24,500 Members</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

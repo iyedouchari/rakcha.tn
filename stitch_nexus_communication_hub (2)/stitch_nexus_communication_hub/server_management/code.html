@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Design Hub - Server Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#004d44",
+                        "surface-bright": "#38393c",
+                        "outline": "#988d9f",
+                        "on-primary-fixed": "#2c0051",
+                        "on-error": "#690005",
+                        "secondary": "#44e2cd",
+                        "secondary-fixed-dim": "#3cddc7",
+                        "tertiary-container": "#ff516a",
+                        "tertiary-fixed-dim": "#ffb2b7",
+                        "on-surface": "#e3e2e6",
+                        "surface-container-high": "#292a2d",
+                        "outline-variant": "#4d4354",
+                        "on-tertiary-fixed-variant": "#92002a",
+                        "on-primary-fixed-variant": "#6900b3",
+                        "tertiary-fixed": "#ffdadb",
+                        "on-secondary-fixed-variant": "#005047",
+                        "surface-container": "#1f1f23",
+                        "surface-dim": "#121316",
+                        "on-error-container": "#ffdad6",
+                        "on-background": "#e3e2e6",
+                        "inverse-primary": "#842bd2",
+                        "surface-container-low": "#1a1b1e",
+                        "on-primary": "#490080",
+                        "on-secondary-fixed": "#00201c",
+                        "on-secondary": "#003731",
+                        "surface": "#121316",
+                        "tertiary": "#ffb2b7",
+                        "background": "#121316",
+                        "on-tertiary": "#67001b",
+                        "primary-container": "#b76dff",
+                        "surface-container-highest": "#343538",
+                        "inverse-surface": "#e3e2e6",
+                        "primary-fixed-dim": "#ddb7ff",
+                        "error": "#ffb4ab",
+                        "primary": "#ddb7ff",
+                        "on-tertiary-fixed": "#40000d",
+                        "surface-variant": "#343538",
+                        "error-container": "#93000a",
+                        "secondary-container": "#03c6b2",
+                        "primary-fixed": "#f0dbff",
+                        "on-tertiary-container": "#5b0017",
+                        "surface-container-lowest": "#0d0e11",
+                        "on-surface-variant": "#cfc2d6",
+                        "inverse-on-surface": "#2f3033",
+                        "on-primary-container": "#400071",
+                        "surface-tint": "#ddb7ff",
+                        "secondary-fixed": "#62fae3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "server-rail-width": "72px",
+                        "member-list-width": "240px",
+                        "stack-lg": "16px",
+                        "stack-sm": "4px",
+                        "sidebar-width": "240px",
+                        "stack-md": "8px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter", "sans-serif"],
+                        "headline-md": ["Geist", "sans-serif"],
+                        "display-sm": ["Geist", "sans-serif"],
+                        "label-md": ["Geist", "sans-serif"],
+                        "chat-text": ["Inter", "sans-serif"],
+                        "headline-sm": ["Geist", "sans-serif"],
+                        "body-md": ["Inter", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-sm": ["30px", { "lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "chat-text": ["15px", { "lineHeight": "1.5", "letterSpacing": "0px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-md": ["15px", { "lineHeight": "22px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Geist:wght@600;700&display=swap');
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen w-full overflow-hidden flex font-body-sm">
+<!-- Navigation Shell Suppressed as this is a Settings/Task-Focused View -->
+<!-- Main Settings Canvas -->
+<div class="flex flex-1 w-full h-full bg-surface">
+<!-- Settings Navigation Sidebar (Left) -->
+<div class="w-sidebar-width h-full bg-surface-container-low flex flex-col z-40 border-r border-outline-variant/20 flex-shrink-0">
+<div class="p-4 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+<!-- Category: SERVER SETTINGS -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase mb-stack-md px-2">Design Hub</h3>
+<ul class="flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150" href="#">
+                                Overview
+                            </a>
+</li>
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 rounded bg-surface-container-highest text-on-surface font-semibold before:content-[''] before:absolute before:left-0 before:w-1 before:h-4 before:bg-primary before:rounded-full relative" href="#">
+                                Roles
+                            </a>
+</li>
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150" href="#">
+                                Emoji
+                            </a>
+</li>
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150" href="#">
+                                Stickers
+                            </a>
+</li>
+</ul>
+</div>
+<!-- Category: COMMUNITY -->
+<div>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase mb-stack-md px-2">Community</h3>
+<ul class="flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150" href="#">
+                                Enable Community
+                            </a>
+</li>
+<li>
+<a class="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant opacity-60 hover:opacity-100 hover:bg-surface-container-high rounded transition-colors duration-150" href="#">
+                                Safety Setup
+                            </a>
+</li>
+</ul>
+</div>
+</div>
+<div class="mt-auto p-4 border-t border-outline-variant/20">
+<button class="flex items-center gap-2 px-2 py-1.5 w-full text-error hover:bg-error/10 rounded transition-colors duration-150 font-body-sm text-body-sm font-medium">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">delete</span>
+                    Delete Server
+                </button>
+</div>
+</div>
+<!-- Center: Roles Management List -->
+<div class="w-[400px] h-full bg-surface flex flex-col border-r border-outline-variant/20 flex-shrink-0">
+<div class="h-16 flex items-center justify-between px-6 border-b border-outline-variant/20 flex-shrink-0">
+<h1 class="font-headline-md text-headline-md text-on-surface">Roles</h1>
+<button class="bg-primary text-on-primary px-3 py-1.5 rounded-lg font-body-sm text-body-sm font-medium hover:bg-primary-fixed transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Create Role
+                </button>
+</div>
+<div class="p-6 overflow-y-auto flex-1">
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-6">Use roles to group your members and assign permissions.</p>
+<!-- Search Bar -->
+<div class="relative mb-6">
+<input class="w-full bg-surface-container-highest border border-outline-variant/30 rounded-lg pl-10 pr-4 py-2 font-body-sm text-body-sm text-on-surface placeholder-on-surface-variant/40 focus:outline-none focus:border-primary transition-colors" placeholder="Search roles" type="text"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/60 text-[18px]">search</span>
+</div>
+<!-- Roles List (Drag and Drop UI) -->
+<div class="flex flex-col gap-2">
+<!-- Role Item: Moderator (Active) -->
+<div class="group flex items-center gap-3 p-3 bg-surface-container-high rounded-lg border border-primary/30 cursor-pointer hover:border-primary/50 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant/40 cursor-grab hover:text-on-surface-variant text-[20px]">drag_indicator</span>
+<div class="w-3 h-3 rounded-full bg-secondary-container flex-shrink-0"></div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium flex-1">Moderator</span>
+<span class="material-symbols-outlined text-on-surface-variant/60 hover:text-on-surface text-[18px]">more_horiz</span>
+</div>
+<!-- Role Item: VIP -->
+<div class="group flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/20 cursor-pointer hover:bg-surface-container hover:border-outline-variant/40 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant/40 cursor-grab hover:text-on-surface-variant text-[20px]">drag_indicator</span>
+<div class="w-3 h-3 rounded-full bg-tertiary-container flex-shrink-0"></div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium flex-1">VIP</span>
+<span class="material-symbols-outlined text-on-surface-variant/60 hover:text-on-surface text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">more_horiz</span>
+</div>
+<!-- Role Item: Member -->
+<div class="group flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/20 cursor-pointer hover:bg-surface-container hover:border-outline-variant/40 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant/40 cursor-grab hover:text-on-surface-variant text-[20px]">drag_indicator</span>
+<div class="w-3 h-3 rounded-full bg-outline flex-shrink-0"></div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium flex-1">Member</span>
+<span class="material-symbols-outlined text-on-surface-variant/60 hover:text-on-surface text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">more_horiz</span>
+</div>
+<!-- Role Item: @everyone (Fixed) -->
+<div class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/10 cursor-not-allowed opacity-70 mt-4">
+<span class="material-symbols-outlined text-on-surface-variant/20 text-[20px]">lock</span>
+<div class="w-3 h-3 rounded-full bg-outline-variant flex-shrink-0"></div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium flex-1">@everyone</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right: Role Details / Permissions Panel -->
+<div class="flex-1 h-full bg-surface flex flex-col overflow-y-auto">
+<!-- Sticky Header -->
+<div class="sticky top-0 bg-surface/90 backdrop-blur-md h-16 flex items-center px-8 border-b border-outline-variant/20 z-10">
+<div class="flex items-center gap-4">
+<div class="w-4 h-4 rounded-full bg-secondary-container shadow-[0_0_12px_rgba(3,198,178,0.4)]"></div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Edit Role: Moderator</h2>
+</div>
+</div>
+<!-- Content Canvas -->
+<div class="p-8 max-w-3xl">
+<!-- Display Tab Navigation -->
+<div class="flex gap-6 border-b border-outline-variant/20 mb-8">
+<button class="pb-3 border-b-2 border-primary font-body-sm text-body-sm text-primary font-medium">Display</button>
+<button class="pb-3 border-b-2 border-transparent font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors">Permissions</button>
+<button class="pb-3 border-b-2 border-transparent font-body-sm text-body-sm text-on-surface-variant hover:text-on-surface transition-colors">Manage Members (12)</button>
+</div>
+<!-- Display Settings Section -->
+<div class="space-y-8">
+<!-- Role Name -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-2">Role Name</label>
+<input class="w-full bg-surface-container-highest border border-outline-variant/30 rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary transition-colors max-w-md" type="text" value="Moderator"/>
+</div>
+<!-- Role Color -->
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase mb-2">Role Color</label>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg bg-secondary-container border border-outline-variant/30 flex items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined text-on-secondary-container">colorize</span>
+</div>
+<div class="flex flex-wrap gap-2 max-w-[280px]">
+<!-- Color Swatches -->
+<button class="w-8 h-8 rounded-full bg-[#1abc9c] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#2ecc71] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#3498db] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#9b59b6] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#e91e63] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#f1c40f] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#e67e22] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#e74c3c] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#95a5a6] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+<button class="w-8 h-8 rounded-full bg-[#607d8b] ring-2 ring-transparent hover:ring-outline-variant transition-all"></button>
+</div>
+</div>
+</div>
+<hr class="border-outline-variant/20"/>
+<!-- Toggles -->
+<div class="space-y-6">
+<!-- Toggle 1 -->
+<div class="flex items-start justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/10">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Display role members separately from online members</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Members with this role will appear in their own group in the member list.</p>
+</div>
+<!-- Custom Toggle Switch -->
+<label class="relative inline-flex items-center cursor-pointer mt-1 flex-shrink-0">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-on-surface after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-checked:after:bg-on-primary"></div>
+</label>
+</div>
+<!-- Toggle 2 -->
+<div class="flex items-start justify-between gap-4 p-4 bg-surface-container-low rounded-xl border border-outline-variant/10">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1">Allow anyone to @mention this role</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Lets anyone ping all members with this role.</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer mt-1 flex-shrink-0">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-on-surface-variant after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary peer-checked:after:bg-on-primary"></div>
+</label>
+</div>
+</div>
+</div>
+<!-- Unsaved Changes Bar (Floating) -->
+<div class="fixed bottom-6 left-[720px] right-8 bg-surface-container-highest rounded-xl border border-outline-variant/30 shadow-lg p-4 flex items-center justify-between z-20 animate-slide-up">
+<p class="font-body-md text-body-md text-on-surface ml-2">Careful — you have unsaved changes!</p>
+<div class="flex gap-3">
+<button class="px-4 py-2 font-body-sm text-body-sm text-on-surface hover:underline">Reset</button>
+<button class="px-6 py-2 bg-[#2ecc71] hover:bg-[#27ae60] text-black font-body-sm text-body-sm font-medium rounded-lg transition-colors">Save Changes</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Esc Button (Top Right) -->
+<button class="absolute top-6 right-6 w-10 h-10 flex flex-col items-center justify-center gap-1 group z-50">
+<div class="w-8 h-8 rounded-full border-2 border-on-surface-variant/40 flex items-center justify-center group-hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-on-surface text-[20px]">close</span>
+</div>
+<span class="font-label-md text-[10px] text-on-surface-variant/80 font-bold uppercase tracking-widest">ESC</span>
+</button>
+</div>
+<style>
+        /* Custom Scrollbar for Settings */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+        }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.3s ease-out forwards;
+        }
+    </style>
+</body></html>

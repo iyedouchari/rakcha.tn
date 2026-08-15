@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Direct Messages - TechRefined</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#004d44",
+                    "surface-bright": "#38393c",
+                    "outline": "#988d9f",
+                    "on-primary-fixed": "#2c0051",
+                    "on-error": "#690005",
+                    "secondary": "#44e2cd",
+                    "secondary-fixed-dim": "#3cddc7",
+                    "tertiary-container": "#ff516a",
+                    "tertiary-fixed-dim": "#ffb2b7",
+                    "on-surface": "#e3e2e6",
+                    "surface-container-high": "#292a2d",
+                    "outline-variant": "#4d4354",
+                    "on-tertiary-fixed-variant": "#92002a",
+                    "on-primary-fixed-variant": "#6900b3",
+                    "tertiary-fixed": "#ffdadb",
+                    "on-secondary-fixed-variant": "#005047",
+                    "surface-container": "#1f1f23",
+                    "surface-dim": "#121316",
+                    "on-error-container": "#ffdad6",
+                    "on-background": "#e3e2e6",
+                    "inverse-primary": "#842bd2",
+                    "surface-container-low": "#1a1b1e",
+                    "on-primary": "#490080",
+                    "on-secondary-fixed": "#00201c",
+                    "on-secondary": "#003731",
+                    "surface": "#121316",
+                    "tertiary": "#ffb2b7",
+                    "background": "#121316",
+                    "on-tertiary": "#67001b",
+                    "primary-container": "#b76dff",
+                    "surface-container-highest": "#343538",
+                    "inverse-surface": "#e3e2e6",
+                    "primary-fixed-dim": "#ddb7ff",
+                    "error": "#ffb4ab",
+                    "primary": "#ddb7ff",
+                    "on-tertiary-fixed": "#40000d",
+                    "surface-variant": "#343538",
+                    "error-container": "#93000a",
+                    "secondary-container": "#03c6b2",
+                    "primary-fixed": "#f0dbff",
+                    "on-tertiary-container": "#5b0017",
+                    "surface-container-lowest": "#0d0e11",
+                    "on-surface-variant": "#cfc2d6",
+                    "inverse-on-surface": "#2f3033",
+                    "on-primary-container": "#400071",
+                    "surface-tint": "#ddb7ff",
+                    "secondary-fixed": "#62fae3"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "server-rail-width": "72px",
+                    "member-list-width": "240px",
+                    "stack-lg": "16px",
+                    "stack-sm": "4px",
+                    "sidebar-width": "240px",
+                    "stack-md": "8px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "body-sm": ["Inter", "sans-serif"],
+                    "headline-md": ["Geist", "sans-serif"],
+                    "display-sm": ["Geist", "sans-serif"],
+                    "label-md": ["Geist", "sans-serif"],
+                    "chat-text": ["Inter", "sans-serif"],
+                    "headline-sm": ["Geist", "sans-serif"],
+                    "body-md": ["Inter", "sans-serif"]
+            },
+            "fontSize": {
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "display-sm": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "chat-text": ["15px", {"lineHeight": "1.5", "letterSpacing": "0px", "fontWeight": "400"}],
+                    "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "body-md": ["15px", {"lineHeight": "22px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: theme('colors.surface-container-highest');
+            border-radius: theme('borderRadius.full');
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: theme('colors.outline-variant');
+        }
+        
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(30, 31, 34, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Material Icon styling */
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background h-screen w-screen overflow-hidden flex font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- 1. Server Rail (Left 72px) -->
+<!-- Derived from Shared Component: SideNavBar (type: server_rail) -->
+<nav class="fixed left-0 top-0 h-full w-[72px] flex flex-col items-center z-50 bg-surface-container-lowest py-4 gap-3">
+<!-- Active Tab: Home -->
+<button aria-label="Home" class="relative flex items-center justify-center bg-primary text-on-primary rounded-xl w-12 h-12 before:content-[''] before:absolute before:-left-3 before:w-1 before:h-8 before:bg-primary before:rounded-r-full scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">home</span>
+</button>
+<!-- Divider -->
+<div class="w-8 h-[2px] bg-surface-container-high rounded-full my-1"></div>
+<!-- Inactive Tabs -->
+<button aria-label="Gaming Community" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<img class="w-8 h-8 object-cover rounded-full" data-alt="A sleek, futuristic gaming controller icon designed in a highly polished 3d style, glowing with a soft neon cyan light against a dark obsidian background, conveying high-end esports performance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDS7YyfOq6ATFD6QXPBWbFquchRqM_RKB6OkQQklnFSbZjGeAMI5LVbXghFp1Uz81WFfaCIsdLQGrcU4_TKQ18D1i9goICBQsaJ4hjyaEroXUVKfafLjGM_w-q-QppBdBOnJi04aqnO10Z3PFe5CgkY9glGvwYS_uuXEfn-TqhnFOjvamzR1P0TwOtKkgWA3rCzKQIux1hbTLvbK0Mx-wH9KwRxDRdcjNUNY89b7c19NoYHoXj4XHlk"/>
+</button>
+<button aria-label="Design Hub" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<img class="w-8 h-8 object-cover rounded-full" data-alt="A stylized geometric sphere made of iridescent glass, refracting prismatic light, symbolizing creative design and modern artistic communities, set against a deep void background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCezPmicvhEkvA9Bp0oYYjuseZqGhzlH57fUdWNsfKp2wzgJPgSxLwlyZTHDtlgQ-EZGs7yOXFoBAHP9psjzp9Mr9iIKaQNdJZAYcdS40bQJjrm4xrC_9frN2Y4bc6kIZ84A_eXms6iOYe9PEuK6BRjbBW14vPHwMJ33GR5BPdU8QSp9_7G_MMkFlUzXxpgwuXxMhmpByHUO_-UL9j1aa1cJmVdaKvMU75j1A0EN3rwy8zh8jFzM2Ip"/>
+</button>
+<button aria-label="Dev Squad" class="flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full w-12 h-12 hover:rounded-xl hover:bg-primary hover:text-on-primary transition-all duration-200 scale-95 active:scale-90">
+<img class="w-8 h-8 object-cover rounded-full" data-alt="A minimalist tech logo featuring interlocking glowing purple brackets, floating above a brushed metal surface, representing a sophisticated developer community." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcxTivjPUoxyO4fGobNjaSPqAfjktuurILVMqSPnXMzZQ1oZQSyVHuL--yT--UjK3RdIK-l9m0sVGQC3KWV-YWMdrvTImzAfgfZ5mNUt9ZkpveDKETOOTn89QqBMUMLeMMKvEM0RtnXDfwS_N-s5LNT0xZQ_Lg_7XWCOKG7mfVqwbHaNpcheFKE02Q1W4tXwRtT7bG59xyB_55kygTEOh7RN7vfwoR288ztex_bDYElW_S6W6djEso"/>
+</button>
+<!-- Add Server -->
+<button aria-label="Add Server" class="flex items-center justify-center bg-surface-container-high text-secondary rounded-full w-12 h-12 hover:rounded-xl hover:bg-secondary hover:text-on-secondary transition-all duration-200 scale-95 active:scale-90 mt-2">
+<span class="material-symbols-outlined text-2xl">add</span>
+</button>
+<!-- Spacer -->
+<div class="flex-1"></div>
+<!-- Footer Tabs -->
+<button aria-label="Download" class="flex items-center justify-center bg-transparent text-on-surface-variant rounded-full w-12 h-12 hover:bg-surface-container-high transition-all duration-200">
+<span class="material-symbols-outlined">download</span>
+</button>
+</nav>
+<!-- 2. Friends List Sidebar (Left 240px, offset by 72px) -->
+<!-- Structure derived from Shared Component: SideNavBar (type: channel_sidebar) -->
+<aside class="fixed left-[72px] top-0 h-full w-[240px] flex flex-col z-40 bg-surface-container-low border-r border-outline-variant/10">
+<!-- Search/Find -->
+<div class="h-12 w-full flex items-center px-3 border-b border-outline-variant/10 shadow-sm">
+<button class="w-full h-7 bg-surface-container-highest rounded text-left px-2 text-label-md font-label-md text-on-surface-variant flex items-center hover:bg-surface-variant transition-colors">
+                Find or start a conversation
+            </button>
+</div>
+<div class="flex-1 overflow-y-auto py-3 px-2 flex flex-col gap-0.5">
+<!-- Top Actions -->
+<!-- Active state logic: Friends is active -->
+<button class="flex items-center gap-3 px-3 py-2 rounded bg-surface-variant text-on-surface font-headline-sm text-headline-sm transition-colors duration-150">
+<span class="material-symbols-outlined text-on-surface">person</span>
+                Friends
+            </button>
+<button class="flex items-center gap-3 px-3 py-2 rounded text-on-surface-variant opacity-80 hover:opacity-100 hover:bg-surface-container-high hover:text-on-surface font-headline-sm text-headline-sm transition-colors duration-150">
+<span class="material-symbols-outlined text-secondary">rocket_launch</span>
+                Nitro
+            </button>
+<button class="flex items-center justify-between px-3 py-2 rounded text-on-surface-variant opacity-80 hover:opacity-100 hover:bg-surface-container-high hover:text-on-surface font-headline-sm text-headline-sm transition-colors duration-150">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">mark_email_unread</span>
+                    Message Requests
+                </div>
+<span class="bg-error text-on-error font-label-md text-[10px] px-1.5 py-0.5 rounded-full">3</span>
+</button>
+<!-- Divider -->
+<div class="flex items-center justify-between pt-4 pb-1 px-3 mt-2">
+<h3 class="font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer uppercase">Direct Messages</h3>
+<span class="material-symbols-outlined text-on-surface-variant text-sm cursor-pointer hover:text-on-surface">add</span>
+</div>
+<!-- DM List -->
+<button class="flex items-center gap-3 px-2 py-1.5 rounded text-on-surface-variant opacity-80 hover:opacity-100 hover:bg-surface-container-high hover:text-on-surface transition-colors duration-150 group">
+<div class="relative w-8 h-8">
+<img class="w-full h-full rounded-full object-cover" data-alt="A profile picture of a young woman with neon pink hair, wearing cyberpunk-style goggles, illuminated by a harsh teal light against a dark alley background, evoking a futuristic hacker vibe." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWDQwPkHJGWW7J16wWfohBKxesk0jdRuhvi-YENwxVS0egq5QajjeBQkg-0l1lkGwbxrIcTedarX1nnlCCFgqB3Xv8LwjXeiAneomDq8jlFuPGkfps0ZXoOaWtGlha1YmLgPeza8LFFQk7im1ic4G7IZBsudYW3E1nSQjKQYr2RWjYzhkzOvowZFp6yGm3ZRBvDaqLpIgHsae2vncFous74Qj5VSsjy7RitQBEvpqaYI9PEhVd1bQ0"/>
+<!-- Status Dot (Online) -->
+<div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-secondary border-2 border-surface-container-low rounded-full"></div>
+</div>
+<div class="flex flex-col items-start flex-1 overflow-hidden">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate w-full text-left">Sarah Connor</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant truncate w-full text-left">Playing Cyberpunk</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity">close</span>
+</button>
+<button class="flex items-center gap-3 px-2 py-1.5 rounded text-on-surface-variant opacity-80 hover:opacity-100 hover:bg-surface-container-high hover:text-on-surface transition-colors duration-150 group">
+<div class="relative w-8 h-8">
+<img class="w-full h-full rounded-full object-cover" data-alt="A stylized minimalist avatar featuring a geometric fox head composed of glowing orange and purple low-poly triangles on a pitch-black background, indicating a creative tech user." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxUy6XqzCyy_TRMcsT-oPgB9ic_3gbOpT-j38JmydFui3slOlVuVsSoUQFYbQAerCwtMUKiPX5JY54lOFKlWSMg7yOexZ7sFcxUDPCoOeNoHOXvfZMyESXeP2A6HytTZQ3n5ukj6GDZ_gwaNcjIgMSddEjuWvwRKquD3982LFBeN0iBajUjh_tOs8d7afPG6-vqBUV0g1-wO2mVJcYY3cAz8F4TW2uj2uad0ASQyyVGoYJ9fL1ijKY"/>
+<!-- Status Dot (Idle) -->
+<div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-outline border-2 border-surface-container-low rounded-full flex items-center justify-center">
+<div class="w-1.5 h-1.5 bg-surface-container-low rounded-full absolute top-0.5 left-0.5"></div>
+</div>
+</div>
+<div class="flex flex-col items-start flex-1 overflow-hidden">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate w-full text-left">FoxHound_09</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant truncate w-full text-left">Idle for 2h</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity">close</span>
+</button>
+<button class="flex items-center gap-3 px-2 py-1.5 rounded text-on-surface-variant opacity-80 hover:opacity-100 hover:bg-surface-container-high hover:text-on-surface transition-colors duration-150 group">
+<div class="relative w-8 h-8">
+<img class="w-full h-full rounded-full object-cover" data-alt="A dramatic profile image of a shadowy figure wearing a tactical hood, silhouetted against a vibrant, glowing red abstract background, suggesting an intense competitive gamer." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhRCciMjKhTPHVw03uS4MvMIlzskudUIV5lg_-qJpTTAyYjTN4pvTVbmfafjvjVVrzylG-yii3aKCk8tFQ0iFXRIT2EAwS5_rydngVEBpdvwj7L0WZxD10DXSsMfM2JoxC3Ch4IhwiL7SLVHjbsveuHtJc0z1o3ovgxDYM7UfynQyQUtteLK54xR6-WU8pAB09vsFbvgg7I-HIBagQixUtTeslYPGgwpq_d43SaA3rqbjq7cL-4AFm"/>
+<!-- Status Dot (DND) -->
+<div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-error border-2 border-surface-container-low rounded-full flex items-center justify-center">
+<div class="w-2 h-0.5 bg-surface-container-low rounded-full"></div>
+</div>
+</div>
+<div class="flex flex-col items-start flex-1 overflow-hidden">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate w-full text-left">Reaper</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant truncate w-full text-left">Do Not Disturb</span>
+</div>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity">close</span>
+</button>
+</div>
+<!-- User Footer Area -->
+<div class="h-14 bg-surface-container-lowest border-t border-outline-variant/10 px-2 flex items-center justify-between mt-auto">
+<button class="flex items-center gap-2 p-1 rounded hover:bg-surface-container-high transition-colors flex-1 overflow-hidden">
+<div class="relative w-8 h-8 shrink-0">
+<img class="w-full h-full rounded-full object-cover" data-alt="A modern, high-definition portrait of a professional software developer looking directly at the camera, lit by soft, cinematic rim lighting in a dark studio setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmd0tfAtu_EpXB4cqUgnotISmq3DsdchK57KFL_ziBKhc7PyHAk2A3ZdCNr-7wviqGbFTBpd-d_z5NOtfYrKK4EjejTcVbwVF1jLvYezRGM3nN7B3q39de8B_yAaEQYXOHNgvEirJJ0FSlhQn4raRK7qf2RFdpz6QNjYjehV7edN2rmkSn7o9ishUxtXhtwusELRQQuOAHyQUgaOkICw0QR55OShgkLP_etrxTUlHx2HjmbYRez5Aq"/>
+<div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-secondary border-2 border-surface-container-lowest rounded-full"></div>
+</div>
+<div class="flex flex-col items-start truncate">
+<span class="font-headline-sm text-[13px] text-on-surface font-bold leading-tight">Current User</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant leading-tight">Online</span>
+</div>
+</button>
+<div class="flex items-center gap-1 shrink-0">
+<button aria-label="Mute" class="w-8 h-8 rounded hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg">mic</span>
+</button>
+<button aria-label="Deafen" class="w-8 h-8 rounded hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg">headphones</span>
+</button>
+<button aria-label="User Settings" class="w-8 h-8 rounded hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-lg">settings</span>
+</button>
+</div>
+</div>
+</aside>
+<!-- 3. Center Dashboard (Fluid, offset 312px, margin right 240px) -->
+<main class="flex-1 ml-[312px] mr-[240px] h-full flex flex-col bg-surface relative">
+<!-- Background Shader (Subtle atmospheric effect) -->
+<div class="absolute inset-0 w-full h-full opacity-[0.03] pointer-events-none z-0 overflow-hidden" style="background-image: radial-gradient(circle at 50% 0%, theme('colors.primary'), transparent 70%);"></div>
+<!-- Top Nav Bar (Derived from TopNavBar JSON but adapted for Friends) -->
+<header class="flex items-center justify-between px-4 h-12 bg-surface/90 backdrop-blur-md sticky top-0 z-30 shadow-sm border-b border-outline-variant/10 shrink-0">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 text-on-surface font-headline-md text-headline-md font-bold">
+<span class="material-symbols-outlined text-on-surface-variant">person</span>
+                    Friends
+                </div>
+<div class="w-[1px] h-6 bg-outline-variant/30 mx-2"></div>
+<!-- Tabs -->
+<nav class="flex items-center gap-4 font-headline-sm text-headline-sm">
+<button class="px-2 py-1 bg-surface-container-highest text-on-surface rounded font-semibold cursor-pointer active:opacity-70 transition-colors">Online</button>
+<button class="px-2 py-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 rounded cursor-pointer active:opacity-70 transition-colors">All</button>
+<button class="px-2 py-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 rounded cursor-pointer active:opacity-70 transition-colors">Pending</button>
+<button class="px-2 py-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 rounded cursor-pointer active:opacity-70 transition-colors">Blocked</button>
+<button class="px-2 py-1 bg-secondary/10 text-secondary hover:bg-secondary/20 rounded font-semibold cursor-pointer active:opacity-70 transition-colors ml-2">Add Friend</button>
+</nav>
+</div>
+<div class="flex items-center gap-3 text-on-surface-variant">
+<button aria-label="New Group DM" class="w-6 h-6 flex items-center justify-center hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">chat_add_on</span>
+</button>
+<div class="w-[1px] h-4 bg-outline-variant/30"></div>
+<button aria-label="Inbox" class="w-6 h-6 flex items-center justify-center hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">inbox</span>
+</button>
+<button aria-label="Help" class="w-6 h-6 flex items-center justify-center hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+</header>
+<!-- Content Area: Bento Grid Layout for Friends -->
+<div class="flex-1 overflow-y-auto p-6 z-10">
+<!-- Search Bar -->
+<div class="w-full max-w-3xl mb-8 relative">
+<input class="w-full h-9 bg-surface-container-highest rounded border-none focus:ring-1 focus:ring-primary text-body-md font-body-md text-on-surface placeholder:text-on-surface-variant/50 px-3 pr-10 shadow-inner" placeholder="Search" type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1.5 text-on-surface-variant pointer-events-none">search</span>
+</div>
+<h2 class="font-headline-md text-headline-sm text-on-surface-variant uppercase mb-4 border-b border-outline-variant/10 pb-2 max-w-3xl">Online — 4</h2>
+<!-- Grid Container -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-3xl">
+<!-- Bento Card 1 -->
+<div class="glass-panel rounded-xl p-4 flex flex-col gap-4 hover:border-outline-variant/30 transition-all group relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex items-center justify-between relative z-10">
+<div class="flex items-center gap-4">
+<div class="relative w-12 h-12">
+<img class="w-full h-full rounded-xl object-cover" data-alt="A hyper-detailed 3D render of an abstract crystalline structure floating in a dark, atmospheric void. The crystals glow with internal secondary teal light, reflecting off their polished surfaces in a modern technological style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3g9K1Kmyvn4PUEN4eicxhAJDZ-yh0oE9oyeatv12Zb2dICQY_KpHFogPMo-72xI2N43l7qjTN5kWrTjux_lHoFe-r9yXWfBlpHMXYeq33ssCp-aV1BmuFfZiut27BRLISKLFzvLp1AsNNu4ahDR6rqbjVF_KGb8Huh5_a_9sDodAR4ff1mkDE-xFmTY3swRCCbTiOuRAkbd9D8kxal0yOS4CuMzabKT4EjiIPmtFJPmFb5jthY6aS"/>
+<div class="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-surface-container rounded-full"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-[16px] text-on-surface font-semibold flex items-center gap-2">
+                                    Alex Chen
+                                    <span class="font-label-md text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded">Mobile</span>
+</span>
+<span class="font-body-sm text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">sports_esports</span>
+                                    Playing Valorant
+                                </span>
+</div>
+</div>
+<!-- Action Buttons (reveal on hover) -->
+<div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Bento Card 2 -->
+<div class="glass-panel rounded-xl p-4 flex flex-col gap-4 hover:border-outline-variant/30 transition-all group relative overflow-hidden">
+<div class="flex items-center justify-between relative z-10">
+<div class="flex items-center gap-4">
+<div class="relative w-12 h-12">
+<img class="w-full h-full rounded-xl object-cover" data-alt="A stylized digital painting of a cyberpunk city skyline at night, viewed through a rain-streaked window. Neon pinks and purples illuminate the dark, moody scene, creating a rich atmospheric depth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLEyggRLADtr9rIEbmbk-o61tj1LawbORUNl2Pf930Imd_PJ9YfePl27ubTUGD1qb5yBBmFIGD6DAhXKtT_2H5fBc-EwNDiQFVN9RF_wIRfiUZl7MVLqoGbWpvAYOC0yeY6JVzSquhhq8IRTFNzdHKmhj4RShAxIW_fg-R5XvKXtM8w8u8aITKyHFIH7yTCGBgYeWY4amEEypQMhtIguWB3Bl1v3SCS7k-3uIgdp5MJ9Bbdet5T3_p"/>
+<div class="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-surface-container rounded-full"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-[16px] text-on-surface font-semibold">Maya_Design</span>
+<span class="font-body-sm text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">palette</span>
+                                    Figma - Landing Page V2
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Bento Card 3 -->
+<div class="glass-panel rounded-xl p-4 flex flex-col gap-4 hover:border-outline-variant/30 transition-all group relative overflow-hidden">
+<div class="flex items-center justify-between relative z-10">
+<div class="flex items-center gap-4">
+<div class="relative w-12 h-12">
+<img class="w-full h-full rounded-xl object-cover" data-alt="A close-up macro shot of a complex circuit board, illuminated by a single intense beam of warm orange light against deep black silicon. The visual implies high performance hardware and deep tech engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmnJt76lYGtjwpCWmBCxFMVBac3cFMIgxNhl2ZwtoqyYCBouFBJ5YFCYlx_wLp03hwKWIjzqMrdlhw8hD9q9AsGtvoZbeDwtbE7M4114dPfiKnsJbw89PcM3dYz58E2103odFHQzZwASD9dCkvqsDInJJO87VCqDY7cL_bhjcUe6k-lYdjHw1uZ4zBAQyfJJcl7UY44Ffge7WoPlYJCAeuegEdDsUnkqN-cyIplTE_k_BrSmz8dRWh"/>
+<div class="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-surface-container rounded-full"></div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-md text-[16px] text-on-surface font-semibold">David.Dev</span>
+<span class="font-body-sm text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">code</span>
+                                    VS Code - api-gateway.ts
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Bento Card 4 (Listening to Music) -->
+<div class="glass-panel rounded-xl p-4 flex flex-col gap-4 hover:border-outline-variant/30 transition-all group relative overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-r from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+<div class="flex items-center justify-between relative z-10">
+<div class="flex items-center gap-4">
+<div class="relative w-12 h-12">
+<img class="w-full h-full rounded-xl object-cover" data-alt="A minimalist vector illustration of a vinyl record half-emerging from a sleek dark sleeve. The color palette features stark blacks, pristine whites, and a vivid burst of primary magenta on the record label." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHTwdgybQoZoFq4zJL-6SIYkn3if2WSScGEHwlku5rTymxJqHimP6f3VkEzKpvEp8k6BqTE8wSWujP-K6STiSe76JmizgLdpB-ok8FzK11PTL8_ovY-4d5uzHWPq6GHUMv4-sLKnHqom8sowuThlU8ejimhn-KuIc3De4cD8h-ZPN2H9HLy7VrqiY80J-64hibr1EBGWkBxVw0XnMNp_6_hA1ZEQUKwNZBz8S9AJXRrGE9YIpBPzV0"/>
+<div class="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary border-2 border-surface-container rounded-full"></div>
+</div>
+<div class="flex flex-col w-48">
+<span class="font-headline-md text-[16px] text-on-surface font-semibold truncate">Elena_V</span>
+<span class="font-body-sm text-on-surface-variant text-sm flex items-center gap-1 truncate w-full">
+<span class="material-symbols-outlined text-[14px] text-secondary animate-pulse">headphones</span>
+                                    Listening to Lofi Beats
+                                </span>
+</div>
+</div>
+<div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">chat_bubble</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-lg">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- 4. Active Now Sidebar (Fixed Right 240px) -->
+<aside class="fixed right-0 top-0 h-full w-[240px] flex flex-col z-40 bg-surface border-l border-outline-variant/10 p-4 pt-6 overflow-y-auto hidden lg:flex">
+<h2 class="font-headline-md text-headline-sm text-on-surface font-bold mb-4">Active Now</h2>
+<div class="flex flex-col gap-3">
+<!-- Activity Card 1 -->
+<div class="bg-surface-container-low rounded-lg p-3 border border-outline-variant/10 hover:border-outline-variant/30 transition-colors">
+<div class="flex items-start gap-3 mb-3">
+<div class="relative w-8 h-8 shrink-0">
+<img class="w-full h-full rounded-full object-cover" data-alt="Same profile as previously described for Alex Chen: 3D abstract crystalline structure in void with teal glow." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3P9PVV3YPFDRIGE_j90NVTXsr0tq2IiYesxvu25dvaPFhiq7qH_Xco31p6RyfBBe0JprmI1UM82abwOGvIv3ANyWAA1bWqB2Y5FWAZCb_3oZ8a3QA6cE_rJivj9vUb_OspMq2VvUlgcC9JYHOCmLZxqKwW8Lbl1O8gk-PXy4bU3Pd4OxBpkFTaLrp8SjTf6cOuhItPpUv5AFduZqxrNWHqwDXgFGQ9Rugd4FU8huNtElwvPRqcADL"/>
+<div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-secondary border-2 border-surface-container-low rounded-full"></div>
+</div>
+<div class="flex flex-col leading-tight">
+<span class="font-headline-sm text-sm text-on-surface font-semibold">Alex Chen</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant">Playing Valorant</span>
+</div>
+</div>
+<div class="flex gap-2">
+<!-- Game Icon Placeholder -->
+<div class="w-16 h-16 bg-surface-container-highest rounded shrink-0 overflow-hidden relative">
+<img class="w-full h-full object-cover" data-alt="A striking red and black stylized letter V logo with sharp, aggressive angles, set against a dark textured background, reminiscent of a competitive tactical shooter game icon." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAV-5era144m41au5CvVLgQpSPap_fLaio6YSi_jc7JX-a8ZSRHef7C-LBrOfGmIqKzhwFXFY_quYRDbc-gTGUUDn0Cln2A_nQpxJLy3E04i4O7BNXeDFfASziJ8YXVNesKyKHz33z0GpEJulWojOHf7ygkqeqXJDE-Okqe1lqpju1FLJOJSreO4Bmh67Ov2Mz7rAkNx2izkwEEY-abLs982CMDokYE2LVp5323A_uZi28wBAgHVLzA"/>
+</div>
+<div class="flex flex-col justify-center overflow-hidden">
+<span class="font-headline-sm text-[13px] text-on-surface font-semibold truncate w-full">Competitive</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant truncate w-full">In Match - 12:45</span>
+</div>
+</div>
+</div>
+<!-- Activity Card 2 -->
+<div class="bg-surface-container-low rounded-lg p-3 border border-outline-variant/10 hover:border-outline-variant/30 transition-colors">
+<div class="flex items-start gap-3 mb-3">
+<div class="relative w-8 h-8 shrink-0">
+<img class="w-full h-full rounded-full object-cover" data-alt="Same profile as Maya_Design: cyberpunk city skyline at night through rain-streaked window." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPM9HMbXAjB6SFTunvotRY0x1Hrt5JPl1F0DyYymxETjiy_1P4jnzJv2N3jqEXiVy4bN-fJMKEjk8OKQNznxpEXxtGtUC66VM0GbIQLVTY--30momMahnuhxnQIQhASSF0apAa-dBg08-kictXL_pXwAzb0bMyCVhsYOzOppIFPhAS9655czMbIi_aA2Xf1QIjpbIRg-OK_zw7g8q4imqRkJ4yy11rtwTAUayGzY52f3AP3pXkFdKM"/>
+<div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-secondary border-2 border-surface-container-low rounded-full"></div>
+</div>
+<div class="flex flex-col leading-tight">
+<span class="font-headline-sm text-sm text-on-surface font-semibold">Maya_Design</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant">Figma</span>
+</div>
+</div>
+<div class="flex gap-2 items-center">
+<div class="w-8 h-8 bg-surface-container-highest rounded flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary">palette</span>
+</div>
+<div class="flex flex-col justify-center overflow-hidden">
+<span class="font-headline-sm text-[13px] text-on-surface font-semibold truncate w-full">Landing Page V2</span>
+<span class="font-body-sm text-[11px] text-on-surface-variant truncate w-full">Editing for 45m</span>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</body></html>
