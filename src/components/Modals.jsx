@@ -1,193 +1,246 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useRakchaStore } from '../store/useRakchaStore';
-import { X, Upload, MessageSquare, Video, RefreshCw } from 'lucide-react';
+import { X, Check, UserPlus, Bell, Copy, AlertTriangle } from 'lucide-react';
+import { SearchUsers } from './SearchUsers';
+import { normalizeUsername, DEFAULT_AVATAR } from '../lib/utils';
 
-export function UserProfileModal({ user, onClose }) {
-  const { removeFriend, addFriend, currentUser, startDirectMessage, joinCall, isMuted, toggleMute } = useRakchaStore();
+// ── Invitations Panel ────────────────────────────────────────────────────────
+export function InvitationsPanel({ isOpen, onClose }) {
+  const friendRequests = useRakchaStore(s => s.friendRequests);
+  const acceptFriendRequest = useRakchaStore(s => s.acceptFriendRequest);
+  const declineFriendRequest = useRakchaStore(s => s.declineFriendRequest);
+  const showToast = useRakchaStore(s => s.showToast);
 
-  if (!user) return null;
-  
-  const isFriend = currentUser.friends?.includes(user.id);
+  if (!isOpen) return null;
 
-  const handleMessage = () => {
-    startDirectMessage(user);
-    onClose();
-  };
-
-  const handleCall = () => {
-    startDirectMessage(user);
-    // In a real app we'd trigger joinCall on the new DM ID, but since it's async we'll just start the DM.
-    onClose();
+  const handle = async (fn, id, msg) => {
+    try {
+      await fn(id);
+      showToast(msg);
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-container w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200 border border-outline-variant/20" onClick={e => e.stopPropagation()}>
-        {/* Banner */}
-        <div className="h-24 bg-gradient-to-r from-primary to-secondary w-full relative">
-          <button onClick={onClose} className="absolute right-3 top-3 text-white/70 hover:text-white bg-black/20 p-1 rounded-full backdrop-blur-md transition"><X size={20}/></button>
-        </div>
-        
-        {/* Profile Info */}
-        <div className="px-6 pb-6 relative">
-          <div className="absolute -top-10 left-6 rounded-full border-4 border-surface-container bg-surface-container">
-            <img src={user.avatar} className="w-20 h-20 rounded-full object-cover" alt={user.name} />
-            {user.status === 'online' && <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-surface-container"></div>}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-container w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-outline-variant/20 animate-in fade-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
+          <div className="flex items-center gap-2">
+            <Bell size={18} className="text-primary" />
+            <h2 className="text-lg font-heading font-bold">Invitations</h2>
+            {friendRequests.length > 0 && (
+              <span className="bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full">{friendRequests.length}</span>
+            )}
           </div>
-          
-          <div className="pt-12">
-            <h2 className="text-xl font-bold text-foreground">{user.name}</h2>
-            <p className="text-sm text-primary font-medium">{user.username || '@username'}</p>
-            
-            <div className="mt-4 bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/10">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">About Me</h3>
-              <p className="text-sm text-foreground/90">{user.bio || 'This user has no bio yet.'}</p>
-            </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
+        </div>
 
-            <div className="flex gap-2">
-              <button onClick={handleMessage} className="flex-1 bg-primary hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition flex items-center justify-center gap-2">
-                <MessageSquare size={18} /> Message
-              </button>
-              <button onClick={handleCall} className="bg-surface-container-high hover:bg-surface-bright text-foreground px-4 py-2.5 rounded-lg transition">
-                <Video size={18} />
-              </button>
+        <div className="p-4 flex flex-col gap-3 max-h-[60vh] overflow-y-auto">
+          {friendRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Bell size={40} className="text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No pending invitations.</p>
+            </div>
+          ) : (
+            friendRequests.map(req => (
+              <div key={req.id} className="flex items-center gap-3 bg-surface-container-high rounded-xl p-3">
+                <img
+                  src={req.sender?.avatar_url || DEFAULT_AVATAR}
+                  className="w-11 h-11 rounded-full object-cover shrink-0"
+                  alt={req.sender?.display_name}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{req.sender?.display_name || 'Unknown'}</p>
+                  <p className="text-xs text-muted-foreground truncate">@{normalizeUsername(req.sender?.username)}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handle(acceptFriendRequest, req.id, 'Friend request accepted!')}
+                    className="w-9 h-9 bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white rounded-lg flex items-center justify-center transition"
+                    title="Accept"
+                  >
+                    <Check size={18} />
+                  </button>
+                  <button
+                    onClick={() => handle(declineFriendRequest, req.id, 'Friend request declined.')}
+                    className="w-9 h-9 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg flex items-center justify-center transition"
+                    title="Decline"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Add Friend Modal ─────────────────────────────────────────────────────────
+export function AddFriendModal({ isOpen, onClose }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-container w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden border border-outline-variant/20 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
+          <div className="flex items-center gap-2">
+            <UserPlus size={18} className="text-primary" />
+            <h2 className="text-lg font-heading font-bold">Add Friend</h2>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
+        </div>
+        <div className="p-6">
+          <SearchUsers onClose={onClose} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Invite Code Modal ──────────────────────────────────────────────────────
+export function InviteCodeModal({ isOpen, onClose, group, currentUser, groupMembers, regenerateGroupCode }) {
+  const showToast = useRakchaStore(s => s.showToast);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  if (!isOpen || !group) return null;
+
+  const myRole = groupMembers?.find(m => m.id === currentUser?.id)?.groupRole;
+  const isAdmin = myRole === 'owner' || myRole === 'admin';
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+        <div className="bg-surface-container-high w-full max-w-sm rounded-[2rem] shadow-2xl overflow-hidden border border-outline-variant/20 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="p-6 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container">
+            <h2 className="text-xl font-heading font-bold text-foreground">Invitation Code</h2>
+            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-full hover:bg-surface-container-highest">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-8 flex flex-col items-center text-center gap-6">
+            <div className="w-full">
+              <p className="text-sm text-muted-foreground mb-3">Share this code with others to let them join <span className="font-bold text-foreground">{group.name}</span>.</p>
+              <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/30 flex items-center justify-between shadow-inner">
+                <span className="font-mono text-2xl tracking-widest font-bold text-primary">{group.code}</span>
+                <button 
+                  onClick={() => { navigator.clipboard.writeText(group.code); showToast('Code copied!', 'success'); }} 
+                  className="bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors p-2 rounded-lg"
+                  title="Copy Code"
+                >
+                  <Copy size={18} />
+                </button>
+              </div>
             </div>
             
-            <div className="flex gap-3 mt-3">
-              <button onClick={() => { toggleMute(); onClose(); }} className="flex-1 bg-surface-container-high hover:bg-surface-bright text-foreground py-2.5 rounded-lg text-sm font-medium transition">
-                {isMuted ? 'Unmute User' : 'Mute User'}
-              </button>
-              {isFriend ? (
-                <button onClick={() => { removeFriend(user.id); onClose(); }} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 py-2.5 rounded-lg text-sm font-medium transition">
-                  Remove Friend
-                </button>
-              ) : (
-                <button onClick={() => { addFriend(user.id); onClose(); }} className="flex-1 bg-green-500/10 hover:bg-green-500/20 text-green-500 py-2.5 rounded-lg text-sm font-medium transition">
-                  Send Invitation
+            <div className="w-full bg-surface-container rounded-xl p-4 border border-outline-variant/20 flex flex-col gap-3">
+              <div className="flex items-start gap-2 text-left">
+                <div className="text-orange-500 mt-0.5"><AlertTriangle size={16} /></div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <strong className="text-foreground">Logic Label:</strong> Regeneration is restricted to the Group Creator or Admins.
+                </p>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowConfirm(true)}
+                  className="w-full py-2.5 bg-surface-container-highest hover:bg-surface-bright text-foreground text-sm font-semibold rounded-lg transition-colors border border-outline-variant/30 flex items-center justify-center gap-2"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                  Regenerate Code
                 </button>
               )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      <ConfirmModal
+        isOpen={showConfirm}
+        title="Regenerate Code?"
+        message="Regenerating will revoke the old code. Existing members will stay in the group, but anyone using the old code won't be able to join."
+        confirmText="Regenerate"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          await regenerateGroupCode(group.id);
+          setShowConfirm(false);
+        }}
+        onCancel={() => setShowConfirm(false)}
+      />
+    </>
   );
 }
 
-export function EditGroupModal({ group, isOpen, onClose }) {
-  const { updateGroup, regenerateGroupCode } = useRakchaStore();
-  
-  if (!isOpen || !group) return null;
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    updateGroup(group.id, { 
-      name: formData.get('name'),
-      description: formData.get('description')
-    });
-    onClose();
-  };
-
-  const handleChangeAvatar = () => {
-    // Mock avatar update
-    const avatars = [
-      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=100&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1491438590914-bc09fcaaf77a?q=80&w=100&auto=format&fit=crop',
-      'https://images.unsplash.com/photo-1529156069898-49953eb1b5ce?q=80&w=100&auto=format&fit=crop',
-      group.icon
-    ];
-    const currentIndex = avatars.indexOf(group.icon);
-    const nextIndex = (currentIndex + 1) % avatars.length;
-    updateGroup(group.id, { icon: avatars[nextIndex] });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-container w-full max-w-md rounded-2xl shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200 border border-outline-variant/20" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
-          <h2 className="text-lg font-heading font-bold text-foreground">Group Settings</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
-        </div>
-
-        <div className="p-6">
-          {/* Password / Invite Code Section */}
-          <div className="bg-surface-container-highest rounded-xl p-4 mb-6 border border-primary/20 relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-            <h3 className="text-xs font-bold text-primary uppercase tracking-wider mb-1">Group Password / Invite Code</h3>
-            <p className="text-xs text-muted-foreground mb-3">Share this code to let people join.</p>
-            <div className="flex items-center gap-3">
-              <code className="flex-1 bg-background text-foreground font-mono text-center py-2 rounded-lg border border-outline-variant/30 text-lg tracking-widest uppercase">
-                {group.inviteCode || 'N/A'}
-              </code>
-              <button onClick={() => regenerateGroupCode(group.id)} className="w-10 h-10 bg-surface-container hover:bg-surface-bright flex items-center justify-center rounded-lg transition text-muted-foreground hover:text-primary" title="Regenerate Code">
-                <RefreshCw size={18} />
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            <div className="flex items-center gap-4 mb-2">
-              <img src={group.icon} className="w-16 h-16 rounded-xl object-cover shrink-0 border border-outline-variant/30" alt="Group Icon" />
-              <button type="button" onClick={handleChangeAvatar} className="bg-surface-container-high hover:bg-surface-bright text-xs font-bold px-3 py-2 rounded-lg transition flex items-center gap-2">
-                <Upload size={14} /> Change Avatar
-              </button>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Group Name</label>
-              <input name="name" defaultValue={group.name} className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Description</label>
-              <textarea name="description" defaultValue={group.description} rows="3" className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition resize-none" placeholder="What is this group about?" />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-3">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-foreground hover:bg-surface-container-high transition font-medium text-sm">Cancel</button>
-              <button type="submit" className="bg-primary hover:bg-indigo-600 text-white px-5 py-2 rounded-lg font-medium transition text-sm shadow-md shadow-primary/20">Save Changes</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function AddFriendModal({ isOpen, onClose }) {
+// ── Generic Confirm Modal ───────────────────────────────────────────────────
+export function ConfirmModal({ isOpen, title, message, confirmText = 'Confirm', cancelText = 'Cancel', confirmVariant = 'danger', onConfirm, onCancel }) {
   if (!isOpen) return null;
-  const handleAddFriend = (e) => {
-    e.preventDefault();
-    if (e.target.username.value.trim()) {
-      // Find user by username
-      const foundUser = null; // Mock search logic could go here
-      // Real app would addFriend here
-      onClose();
-    }
-  };
-  
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-container w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200 border border-outline-variant/20" onClick={e => e.stopPropagation()}>
-        <div className="p-5 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low">
-          <h2 className="text-lg font-heading font-bold text-foreground">Add Friend</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20}/></button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onCancel}>
+      <div className="bg-surface-container-high w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden border border-outline-variant/20 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="p-6 text-center">
+          <div className={`w-12 h-12 ${confirmVariant === 'danger' ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary'} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            <AlertTriangle size={24} />
+          </div>
+          <h2 className="text-xl font-bold mb-2 text-foreground">{title}</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">{message}</p>
         </div>
-        <div className="p-6">
-          <p className="text-sm text-muted-foreground mb-4">You can add friends with their Rakcha username.</p>
-          <form onSubmit={handleAddFriend} className="flex flex-col gap-4">
-            <div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">@</span>
-                <input name="username" required pattern="[a-zA-Z0-9]+_[a-zA-Z0-9]+" title="name_secondname" type="text" placeholder="name_secondname" className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl py-3 pl-8 pr-3 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-sm" />
-              </div>
-            </div>
-            <button type="submit" className="bg-primary hover:bg-indigo-600 text-white py-3 rounded-xl font-bold transition shadow-lg shadow-primary/20">Send Friend Request</button>
-          </form>
+        <div className="bg-surface-container p-4 flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl font-semibold text-foreground bg-surface-container-highest hover:bg-surface-bright transition-colors"
+          >
+            {cancelText}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`flex-1 py-2.5 rounded-xl font-semibold text-white transition-colors shadow-lg ${
+              confirmVariant === 'danger'
+                ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20'
+                : 'bg-primary hover:opacity-90 shadow-primary/20'
+            }`}
+          >
+            {confirmText}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
+// ── Unfriend Confirmation Modal ─────────────────────────────────────────────
+export function UnfriendConfirmModal({ isOpen, userName = 'this friend', onConfirm, onCancel }) {
+  return (
+    <ConfirmModal
+      isOpen={isOpen}
+      title="Remove Friend"
+      message={`Are you sure you want to remove ${userName} from your friends list? Your private direct message chat history will also be removed.`}
+      confirmText="Remove Friend"
+      cancelText="Cancel"
+      confirmVariant="danger"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
+
+// ── Block User Confirmation Modal ───────────────────────────────────────────
+export function BlockUserConfirmModal({ isOpen, userName = 'this user', onConfirm, onCancel }) {
+  return (
+    <ConfirmModal
+      isOpen={isOpen}
+      title={`Block ${userName}`}
+      message={`They will be removed from your friends list, will not be able to message or call you directly, and will appear as 'Rakcha User' in mutual groups.`}
+      confirmText="Block Account"
+      cancelText="Cancel"
+      confirmVariant="danger"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
