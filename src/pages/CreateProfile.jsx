@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRakchaStore } from '../store/useRakchaStore';
 import { Upload, ArrowRight, ArrowLeft, User, AtSign, FileText, Loader2, Sparkles, X, Check } from 'lucide-react';
 import AnimatedBackground from '../components/AnimatedBackground';
+import UsernameInput from '../components/UsernameInput';
+import { validateUsernameFormat, checkUsernameAvailability } from '../utils/validateUsername';
 
 export default function CreateProfile() {
   const { navigate, updateProfile, showToast } = useRakchaStore();
@@ -61,29 +63,41 @@ export default function CreateProfile() {
       showToast('Error: Please upload an avatar image before continuing.', 'error');
       return;
     }
-    if (name.trim() && username.trim()) {
-      const cleanUsername = username.trim().replace(/^@+/, '');
-      if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-        showToast(
-          'Username must be 3-20 characters long and contain only lowercase letters, numbers, and underscores.',
-          'error'
-        );
+
+    if (!name.trim()) {
+      showToast('Please enter your display name.', 'error');
+      return;
+    }
+
+    const validation = validateUsernameFormat(username);
+    if (!validation.isValid) {
+      showToast(validation.message, 'error');
+      return;
+    }
+
+    const fullUsername = validation.fullUsername;
+
+    try {
+      setLoading(true);
+
+      const availability = await checkUsernameAvailability(fullUsername, currentUser?.id);
+      if (!availability.isAvailable) {
+        showToast(availability.message || 'This username is already taken. Please choose another.', 'error');
+        setLoading(false);
         return;
       }
-      try {
-        setLoading(true);
-        await updateProfile({
-          displayName: name.trim(),
-          username: cleanUsername,
-          customStatus: bio.trim(),
-          avatarFile: avatarFile
-        });
-        navigate('app');
-      } catch (err) {
-        showToast('Failed to update profile: ' + err.message, 'error');
-      } finally {
-        setLoading(false);
-      }
+
+      await updateProfile({
+        displayName: name.trim(),
+        username: fullUsername,
+        customStatus: bio.trim(),
+        avatarFile: avatarFile
+      });
+      navigate('app');
+    } catch (err) {
+      showToast('Failed to update profile: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -220,36 +234,13 @@ export default function CreateProfile() {
             </div>
 
             {/* Username Field */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <AtSign size={13} className={focusedField === 'username' ? 'text-primary' : 'text-muted-foreground'} />
-                Username Handle
-              </label>
-              <div
-                className={`relative rounded-xl border transition-all duration-300 flex items-center ${
-                  focusedField === 'username'
-                    ? 'border-primary/80 ring-2 ring-primary/20 bg-[#161820]'
-                    : 'border-white/[0.08] bg-[#0E1015]/90 hover:border-white/[0.15]'
-                }`}
-              >
-                <span className="pl-3.5 text-muted-foreground font-mono text-sm font-bold select-none">
-                  @
-                </span>
-                <input
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
-                  type="text"
-                  placeholder="alex_vance"
-                  className="w-full bg-transparent p-3.5 pl-1.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-sm font-mono font-medium rounded-xl"
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground/70 mt-1 font-mono">
-                3-20 characters: lowercase letters, numbers, and underscores.
-              </p>
-            </div>
+            <UsernameInput
+              value={username}
+              onChange={(val) => setUsername(val)}
+              currentUserId={currentUser?.id}
+              required
+              id="create-profile-username"
+            />
 
             {/* Bio Field */}
             <div>

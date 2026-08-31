@@ -3,13 +3,14 @@ import { useRakchaStore } from '../store/useRakchaStore';
 import { Video, VideoOff, Mic, MicOff, PhoneOff, MonitorUp, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_AVATAR } from '../lib/utils';
-
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
-};
+import {
+  getOptimalUserMedia,
+  createStudioAudioDSP,
+  tuneRTCPeerConnection,
+  tuneVideoSender,
+  boostSDPAudioQuality,
+  RTC_CONFIG
+} from '../utils/webrtcMediaEngine';
 
 /**
  * GroupCallUI — N-party full-mesh WebRTC group call.
@@ -35,13 +36,14 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
   const [remoteStreams, setRemoteStreams] = useState({}); // { [userId]: MediaStream }
   const [localStatus, setLocalStatus] = useState('connecting');
 
-  const localStreamRef    = useRef(null);
-  const screenStreamRef   = useRef(null);
+  const localStreamRef     = useRef(null);
+  const audioDspRef        = useRef(null);
+  const screenStreamRef    = useRef(null);
   const peerConnectionsRef = useRef({}); // { [userId]: RTCPeerConnection }
-  const channelRef        = useRef(null);
-  const localVideoRef     = useRef(null);
-  const pendingCandidates = useRef({}); // { [userId]: RTCIceCandidate[] }
-  const mountedRef        = useRef(true);
+  const channelRef         = useRef(null);
+  const localVideoRef      = useRef(null);
+  const pendingCandidates  = useRef({}); // { [userId]: RTCIceCandidate[] }
+  const mountedRef         = useRef(true);
 
   const callType = session?.call_type || 'video';
 
@@ -77,14 +79,21 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
       return peerConnectionsRef.current[remoteUserId];
     }
     log('Creating PC for', remoteUserId.slice(0, 6));
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    // Add local tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        pc.addTrack(track, localStreamRef.current);
-      });
+    // 3. Attach DSP-conditioned clean audio track & HD video track
+    const audioTrack = audioDspRef.current?.cleanAudioTrack || localStreamRef.current?.getAudioTracks()[0];
+    const videoTrack = localStreamRef.current?.getVideoTracks()[0];
+
+    if (audioTrack) {
+      pc.addTrack(audioTrack, localStreamRef.current);
     }
+    if (videoTrack) {
+      pc.addTrack(videoTrack, localStreamRef.current);
+    }
+
+    // Prioritize VP9 / H.264 codecs
+    tuneRTCPeerConnection(pc);
 
     // ICE candidates
     pc.onicecandidate = (e) => {
@@ -107,7 +116,9 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
 
     pc.onconnectionstatechange = () => {
       log('PC state for', remoteUserId.slice(0, 6), '→', pc.connectionState);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      if (pc.connectionState === 'connected') {
+        tuneVideoSender(pc);
+      } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         // Clean up this peer's stream
         setRemoteStreams(prev => {
           const next = { ...prev };
@@ -125,10 +136,16 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
   const makeOffer = useCallback(async (remoteUserId) => {
     const pc = createPeerConnection(remoteUserId);
     try {
-      const offer = await pc.createOffer();
+      const rawOffer = await pc.createOffer();
+      // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
+      const enhancedSdp = boostSDPAudioQuality(rawOffer.sdp);
+      const offer = { type: rawOffer.type, sdp: enhancedSdp };
+      
       await pc.setLocalDescription(offer);
+      await tuneVideoSender(pc);
+      
       sendSignal(remoteUserId, { type: 'offer', offer });
-      log('Offer sent to', remoteUserId.slice(0, 6));
+      log('High-fidelity offer sent to', remoteUserId.slice(0, 6));
     } catch (e) {
       console.error('makeOffer error', e);
     }
@@ -152,10 +169,17 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         const pc = createPeerConnection(from);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
         await drainCandidates(from);
-        const answer = await pc.createAnswer();
+        
+        const rawAnswer = await pc.createAnswer();
+        // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
+        const enhancedSdp = boostSDPAudioQuality(rawAnswer.sdp);
+        const answer = { type: rawAnswer.type, sdp: enhancedSdp };
+        
         await pc.setLocalDescription(answer);
+        await tuneVideoSender(pc);
+        
         sendSignal(from, { type: 'answer', answer });
-        log('Answer sent to', from.slice(0, 6));
+        log('High-fidelity answer sent to', from.slice(0, 6));
       }
       else if (type === 'answer') {
         log('Answer from', from.slice(0, 6));
@@ -163,6 +187,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         if (pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
           await drainCandidates(from);
+          await tuneVideoSender(pc);
         }
       }
       else if (type === 'ice-candidate') {
@@ -193,6 +218,10 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
   // ── Cleanup helper ──────────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
     mountedRef.current = false;
+    if (audioDspRef.current) {
+      audioDspRef.current.cleanup();
+      audioDspRef.current = null;
+    }
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
     }
@@ -214,7 +243,8 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
 
     const init = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        // 1. High-Definition 1080p Ingest Layer with fallback
+        const stream = await getOptimalUserMedia({
           audio: true,
           video: callType === 'video',
         });
@@ -223,8 +253,21 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
+        // 2. 3-Stage Web Audio DSP Graph (85Hz Highpass -> 3kHz Peaking EQ -> Dynamics Compressor)
+        try {
+          const dsp = createStudioAudioDSP(stream);
+          audioDspRef.current = dsp;
+          await dsp.resume();
+          log('Web Audio 3-Stage Studio DSP Graph active.');
+        } catch (dspErr) {
+          console.warn('[Rakcha GroupCallUI] DSP Graph init fallback:', dspErr);
+        }
+
         // Apply initial mute state
         stream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+        if (audioDspRef.current?.cleanAudioTrack) {
+          audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
+        }
 
         // Setup signaling channel
         channel = supabase.channel(`group-call-${session.id}`, {
@@ -260,12 +303,43 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
   // ── Sync mute state to local audio tracks ──────────────────────────────────
   useEffect(() => {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
+    if (audioDspRef.current?.cleanAudioTrack) {
+      audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
+    }
   }, [isMuted]);
 
-  // ── Camera toggle: enable/disable local video track ────────────────────────
+  // ── Camera toggle: enable/disable or dynamically add local video track ────
   useEffect(() => {
-    const track = localStreamRef.current?.getVideoTracks()[0];
-    if (track) track.enabled = isCameraOn;
+    const handleCameraToggle = async () => {
+      if (!localStreamRef.current) return;
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (isCameraOn) {
+        if (!videoTrack) {
+          try {
+            const newStream = await getOptimalUserMedia({ video: true, audio: false });
+            const newVideoTrack = newStream.getVideoTracks()[0];
+            localStreamRef.current.addTrack(newVideoTrack);
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = null;
+              localVideoRef.current.srcObject = localStreamRef.current;
+            }
+            Object.values(peerConnectionsRef.current).forEach(async (pc) => {
+              pc.addTrack(newVideoTrack, localStreamRef.current);
+              tuneRTCPeerConnection(pc);
+              await tuneVideoSender(pc);
+            });
+          } catch (e) {
+            console.error('Failed to get video track on toggle', e);
+            toggleCamera();
+          }
+        } else {
+          videoTrack.enabled = true;
+        }
+      } else {
+        if (videoTrack) videoTrack.enabled = false;
+      }
+    };
+    handleCameraToggle();
   }, [isCameraOn]);
 
   // ── Screen share ────────────────────────────────────────────────────────────

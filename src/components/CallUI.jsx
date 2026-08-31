@@ -4,6 +4,14 @@ import { Video, VideoOff, Mic, MicOff, PhoneOff, MonitorUp } from 'lucide-react'
 import { supabase } from '../lib/supabase';
 import { playCallingSound, stopCallingSound } from '../lib/audio';
 import { DEFAULT_AVATAR } from '../lib/utils';
+import {
+  getOptimalUserMedia,
+  createStudioAudioDSP,
+  tuneRTCPeerConnection,
+  tuneVideoSender,
+  boostSDPAudioQuality,
+  RTC_CONFIG
+} from '../utils/webrtcMediaEngine';
 
 export function CallUI({ group, currentUser, onLeave }) {
   const { isMuted, isCameraOn, toggleMute, toggleCamera, isCaller, activeCallType, endCall } = useRakchaStore();
@@ -13,6 +21,7 @@ export function CallUI({ group, currentUser, onLeave }) {
   const remoteVideoRef = useRef(null);
   
   const localStreamRef = useRef(null);
+  const audioDspRef = useRef(null);
   const screenStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const peerConnectionRef = useRef(null);
@@ -42,8 +51,10 @@ export function CallUI({ group, currentUser, onLeave }) {
 
     const initMediaAndChannel = async () => {
       try {
-        log('Requesting local media...', { audio: true, video: activeCallType === 'video' });
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        log('Requesting studio 1080p / 48kHz local media...', { audio: true, video: activeCallType === 'video' });
+        
+        // 1. High-Definition 1080p Ingest Layer with fallback
+        const stream = await getOptimalUserMedia({ 
           audio: true, 
           video: activeCallType === 'video' 
         });
@@ -58,8 +69,21 @@ export function CallUI({ group, currentUser, onLeave }) {
           localVideoRef.current.srcObject = stream;
         }
 
+        // 2. 3-Stage Web Audio DSP Graph (85Hz Highpass -> 3kHz Peaking EQ -> Dynamics Compressor)
+        try {
+          const dsp = createStudioAudioDSP(stream);
+          audioDspRef.current = dsp;
+          await dsp.resume();
+          log('Web Audio 3-Stage Studio DSP Graph active.');
+        } catch (dspErr) {
+          console.warn('[Rakcha CallUI] DSP Graph init fallback:', dspErr);
+        }
+
         // Apply initial mute state
         stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+        if (audioDspRef.current?.cleanAudioTrack) {
+          audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
+        }
         
         // Initialize remote stream placeholder
         remoteStreamRef.current = new MediaStream();
@@ -79,19 +103,26 @@ export function CallUI({ group, currentUser, onLeave }) {
           
           try {
             if (payload.type === 'USER_JOINED' && isCaller) {
-              log('Received USER_JOINED. Creating offer...');
+              log('Received USER_JOINED. Creating optimized offer...');
               if (!peerConnectionRef.current) {
                 await createPeerConnection();
               }
-              const offer = await peerConnectionRef.current.createOffer();
-              await peerConnectionRef.current.setLocalDescription(offer);
+              const pc = peerConnectionRef.current;
+              const rawOffer = await pc.createOffer();
+              
+              // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
+              const enhancedSdp = boostSDPAudioQuality(rawOffer.sdp);
+              const offer = { type: rawOffer.type, sdp: enhancedSdp };
+              
+              await pc.setLocalDescription(offer);
+              await tuneVideoSender(pc);
               
               channel.send({
                 type: 'broadcast',
                 event: 'signal',
                 payload: { type: 'offer', offer, from: currentUser.id }
               });
-              log('Offer sent.');
+              log('High-fidelity offer sent.');
             } 
             else if (payload.type === 'CALLER_JOINED' && !isCaller) {
               log('Caller joined/rejoined. Sending USER_JOINED...');
@@ -102,7 +133,7 @@ export function CallUI({ group, currentUser, onLeave }) {
               });
             } 
             else if (payload.type === 'offer') {
-              log('Received offer. Creating answer...');
+              log('Received offer. Creating optimized answer...');
               if (!peerConnectionRef.current) {
                 await createPeerConnection();
               }
@@ -111,15 +142,21 @@ export function CallUI({ group, currentUser, onLeave }) {
               await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
               processIceQueue(pc);
               
-              const answer = await pc.createAnswer();
+              const rawAnswer = await pc.createAnswer();
+              
+              // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
+              const enhancedSdp = boostSDPAudioQuality(rawAnswer.sdp);
+              const answer = { type: rawAnswer.type, sdp: enhancedSdp };
+              
               await pc.setLocalDescription(answer);
+              await tuneVideoSender(pc);
               
               channel.send({
                 type: 'broadcast',
                 event: 'signal',
                 payload: { type: 'answer', answer, from: currentUser.id }
               });
-              log('Answer sent.');
+              log('High-fidelity answer sent.');
             } 
             else if (payload.type === 'answer') {
               log('Received answer. Setting remote description...');
@@ -128,6 +165,7 @@ export function CallUI({ group, currentUser, onLeave }) {
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
                 processIceQueue(pc);
                 setCallStatus('');
+                await tuneVideoSender(pc);
               }
             } 
             else if (payload.type === 'ice-candidate') {
@@ -186,22 +224,24 @@ export function CallUI({ group, currentUser, onLeave }) {
     };
 
     const createPeerConnection = async () => {
-      log('Initializing RTCPeerConnection');
-      // Use standard STUN servers. In production Rakcha, add TURN servers here.
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      });
+      log('Initializing RTCPeerConnection with STUN configuration');
+      const pc = new RTCPeerConnection(RTC_CONFIG);
 
-      // Add local tracks to PC
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => {
-          log('Adding local track to PC', track.kind);
-          pc.addTrack(track, localStreamRef.current);
-        });
+      // 3. Attach DSP-conditioned clean audio track & video track
+      const audioTrack = audioDspRef.current?.cleanAudioTrack || localStreamRef.current?.getAudioTracks()[0];
+      const videoTrack = localStreamRef.current?.getVideoTracks()[0];
+
+      if (audioTrack) {
+        log('Adding 3-Stage DSP clean audio track to PC');
+        pc.addTrack(audioTrack, localStreamRef.current);
       }
+      if (videoTrack) {
+        log('Adding HD video track to PC');
+        pc.addTrack(videoTrack, localStreamRef.current);
+      }
+
+      // 3. Tune RTCPeerConnection codec preferences (prioritize VP9 / H.264)
+      tuneRTCPeerConnection(pc);
 
       pc.onicecandidate = (event) => {
         if (event.candidate && channelRef.current) {
@@ -226,6 +266,7 @@ export function CallUI({ group, currentUser, onLeave }) {
         log('Connection state changed:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setCallStatus('');
+          tuneVideoSender(pc);
         } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
           setCallStatus('Disconnected');
         }
@@ -238,7 +279,10 @@ export function CallUI({ group, currentUser, onLeave }) {
 
     return () => {
       mounted = false;
-      log('Cleaning up CallUI...');
+      log('Cleaning up CallUI and DSP audio context...');
+      if (audioDspRef.current) {
+        audioDspRef.current.cleanup();
+      }
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
@@ -259,6 +303,9 @@ export function CallUI({ group, currentUser, onLeave }) {
         log('Audio track enabled:', !isMuted);
       });
     }
+    if (audioDspRef.current?.cleanAudioTrack) {
+      audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
+    }
   }, [isMuted]);
 
   // Handle local Camera toggle & Renegotiation (Audio -> Video upgrade)
@@ -271,9 +318,9 @@ export function CallUI({ group, currentUser, onLeave }) {
       
       if (isCameraOn) {
         if (!videoTrack) {
-          log('Upgrading call to Video...');
+          log('Upgrading call to 1080p Video...');
           try {
-            const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const newStream = await getOptimalUserMedia({ video: true, audio: false });
             const newVideoTrack = newStream.getVideoTracks()[0];
             
             // Add track to local stream
@@ -287,17 +334,22 @@ export function CallUI({ group, currentUser, onLeave }) {
 
             // Add track to PeerConnection
             peerConnectionRef.current.addTrack(newVideoTrack, localStreamRef.current);
+            tuneRTCPeerConnection(peerConnectionRef.current);
             
-            // Renegotiate with remote peer
-            const offer = await peerConnectionRef.current.createOffer();
+            // Renegotiate with remote peer with enhanced SDP
+            const rawOffer = await peerConnectionRef.current.createOffer();
+            const enhancedOfferSdp = boostSDPAudioQuality(rawOffer.sdp);
+            const offer = { type: rawOffer.type, sdp: enhancedOfferSdp };
+            
             await peerConnectionRef.current.setLocalDescription(offer);
+            await tuneVideoSender(peerConnectionRef.current);
             
             channelRef.current.send({
               type: 'broadcast',
               event: 'signal',
               payload: { type: 'offer', offer, from: currentUser.id }
             });
-            log('Renegotiation offer sent.');
+            log('Renegotiation offer sent with enhanced 1080p video.');
             
           } catch (e) {
             console.error("Failed to turn camera on", e);
@@ -343,8 +395,12 @@ export function CallUI({ group, currentUser, onLeave }) {
         } else {
           // If started as audio only, add track
           peerConnectionRef.current.addTrack(screenTrack, localStreamRef.current);
-          const offer = await peerConnectionRef.current.createOffer();
+          const rawOffer = await peerConnectionRef.current.createOffer();
+          const enhancedOfferSdp = boostSDPAudioQuality(rawOffer.sdp);
+          const offer = { type: rawOffer.type, sdp: enhancedOfferSdp };
           await peerConnectionRef.current.setLocalDescription(offer);
+          await tuneVideoSender(peerConnectionRef.current);
+          
           channelRef.current.send({
             type: 'broadcast',
             event: 'signal',

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 // Helper to safely set hash without triggering an infinite loop
 const setHash = (page) => {
-  if (window.location.hash !== `#/${page}`) {
+  if (typeof window !== 'undefined' && window.location.hash !== `#/${page}`) {
     window.location.hash = `#/${page}`;
   }
 };
@@ -33,17 +33,22 @@ export const DEFAULT_SETTINGS = {
 
 export const getStoredSettings = () => {
   try {
-    const raw = localStorage.getItem('rakcha_settings');
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('rakcha_settings');
+      if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    }
   } catch (e) {}
   return DEFAULT_SETTINGS;
 };
 
 export const useRakchaStore = create((set, get) => ({
-  currentPage: window.location.hash.replace('#/', '') || 'landing',
+  currentPage: typeof window !== 'undefined' ? (window.location.hash.replace('#/', '') || 'landing') : 'landing',
   
   currentUser: null,
   session: null,
+  authInitialized: false,
+  pendingEmail: typeof localStorage !== 'undefined' ? (localStorage.getItem('rakcha_pending_email') || '') : '',
+  
   groups: [],
   activeGroupId: null,
   activeCallGroupId: null,
@@ -54,13 +59,13 @@ export const useRakchaStore = create((set, get) => ({
   // ── Blocked Users ────────────────────────────────────────────────────────
   blockedUsers: [], // Array of { id, blocker_id, blocked_id, created_at, profile }
 
-  // ── Group call state ──────────────────────────────────────────────────────
+  // ── Group Call State ──────────────────────────────────────────────────────
   activeCallSession: null,      // { id, group_id, call_type, started_by, started_at, participant_count }
   callParticipants: [],         // [{ user_id, display_name, avatar_url }]
-  groupCallSubscription: null,  // realtime channel tracking call_sessions for active group
+  groupCallSubscription: null,  // Realtime channel tracking call_sessions for active group
   incomingGroupCall: null,      // { session_id, group_id, group_name, group_avatar, call_type, starter_name }
-  // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Call & Media Controls ────────────────────────────────────────────────
   searchQuery: '',
   isMuted: false,
   isCameraOn: true,
@@ -70,6 +75,7 @@ export const useRakchaStore = create((set, get) => ({
   activeCallType: 'video', // 'video' | 'audio'
   isCaller: false,
 
+  // ── Chat, Friends, and Realtime Collections ──────────────────────────────
   messages: [], // Array of messages for the active group
   friendRequests: [], // Pending incoming friend requests
   friends: [], // Accepted friends
@@ -80,7 +86,7 @@ export const useRakchaStore = create((set, get) => ({
   typingUsers: {}, // { groupId: [ {userId, username} ] }
   activeGroupSubscription: null,
   
-  // Toast notifications
+  // ── Toast Notifications ──────────────────────────────────────────────────
   toast: null,
   showToast: (message, type = 'info') => {
     set({ toast: { message, type } });
@@ -90,14 +96,24 @@ export const useRakchaStore = create((set, get) => ({
   },
   hideToast: () => set({ toast: null }),
   
-  // Navigation
-  navigate: (page) => set((state) => {
+  // ── Navigation ───────────────────────────────────────────────────────────
+  navigate: (page) => set(() => {
     setHash(page);
     return { currentPage: page };
   }),
   syncRoute: (page) => set({ currentPage: page }),
 
-  // Auth & User Session
+  setPendingEmail: (email) => {
+    try {
+      if (email) localStorage.setItem('rakcha_pending_email', email);
+      else localStorage.removeItem('rakcha_pending_email');
+    } catch (e) {}
+    set({ pendingEmail: email });
+  },
+
+  setOnlineUsers: (onlineIds) => set({ onlineUsers: onlineIds }),
+
+  // ── Auth & User Session ──────────────────────────────────────────────────
   initAuth: () => {
     supabase.auth.onAuthStateChange(async (event, session) => {
       set({ session });
@@ -109,54 +125,57 @@ export const useRakchaStore = create((set, get) => ({
           .single();
           
         if (error || !profile) {
-          // Sanitize username to match DB constraints
-          let safeUsername = session.user.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
-          if (safeUsername.length < 2) safeUsername += '_user';
-          // Always append a random string to guarantee uniqueness
-          safeUsername += '_' + Math.random().toString(36).substring(2, 8);
-          safeUsername = safeUsername.substring(0, 30);
+          // Sanitize username to match DB constraints (@firstname_lastname)
+          const emailPrefix = (session.user.email || 'user').split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          let safeUsername = `@${emailPrefix}`;
+          if (!safeUsername.includes('_')) safeUsername += '_user';
+          if (safeUsername.length > 30) safeUsername = safeUsername.substring(0, 30);
           
-          let { data: newProfile, error: insertError } = await supabase
+          const { data: newProfile, error: insertError } = await supabase
             .from('profiles')
             .insert({
               id: session.user.id,
               username: safeUsername,
-              display_name: session.user.email.split('@')[0],
+              display_name: session.user.email?.split('@')[0] || 'User',
+              is_onboarded: false
             })
             .select()
             .single();
             
           if (insertError) {
-             console.error("Failed to insert fallback profile:", insertError);
-             // If insert fails, try fetching one last time just in case it was created concurrently
-             const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-             newProfile = retryProfile;
+            console.warn("Fallback profile insert notice:", insertError.message);
+            const { data: retryProfile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+            profile = retryProfile;
+          } else {
+            profile = newProfile;
           }
-          profile = newProfile;
         }
         
         // Recover active call from sessionStorage if present
-        const savedCall = sessionStorage.getItem('activeCall');
-        if (savedCall) {
-          try {
-            const callData = JSON.parse(savedCall);
-            set({ 
-              activeCallGroupId: callData.groupId, 
-              activeCallType: callData.callType, 
-              isCaller: callData.isCaller,
-              isCameraOn: callData.callType === 'video'
-            });
-            // We set the activeGroup to match so the UI immediately shows the CallUI
-            set({ activeGroupId: callData.groupId });
-          } catch (e) {
-            sessionStorage.removeItem('activeCall');
+        if (typeof sessionStorage !== 'undefined') {
+          const savedCall = sessionStorage.getItem('activeCall');
+          if (savedCall) {
+            try {
+              const callData = JSON.parse(savedCall);
+              set({ 
+                activeCallGroupId: callData.groupId, 
+                activeCallType: callData.callType, 
+                isCaller: callData.isCaller,
+                isCameraOn: callData.callType === 'video',
+                activeGroupId: callData.groupId
+              });
+            } catch (e) {
+              sessionStorage.removeItem('activeCall');
+            }
           }
         }
         
         if (profile) {
-          profile.banner_color = profile.banner_color || localStorage.getItem(`rakcha_banner_${profile.id}`) || 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)';
+          const savedBanner = typeof localStorage !== 'undefined' ? localStorage.getItem(`rakcha_banner_${profile.id}`) : null;
+          profile.banner_color = profile.banner_color || savedBanner || 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)';
         }
-        set({ currentUser: profile });
+        
+        set({ currentUser: profile, authInitialized: true });
         get().applySettingsToDOM();
         get().fetchUserGroups();
         get().fetchFriendRequests();
@@ -164,41 +183,75 @@ export const useRakchaStore = create((set, get) => ({
         get().fetchMutedUsers();
         get().fetchBlockedUsers();
         get().initRealtimeGlobal();
+
+        // If user is already authenticated, redirect away from public landing/auth screens directly into app
+        const rawHash = typeof window !== 'undefined' ? window.location.hash.replace('#/', '') : '';
+        const currentTarget = rawHash || get().currentPage;
+        if (!currentTarget || currentTarget === 'landing' || currentTarget === 'login' || currentTarget === 'register') {
+          get().navigate('app');
+        }
       } else {
         const { globalSubscription, groupCallSubscription } = get();
         if (globalSubscription) supabase.removeChannel(globalSubscription);
         if (groupCallSubscription) supabase.removeChannel(groupCallSubscription);
         set({
-          currentUser: null, groups: [], messages: [], friendRequests: [],
-          friends: [], mutedUsers: [], blockedUsers: [], onlineUsers: [], globalSubscription: null,
-          activeCallSession: null, callParticipants: [], groupCallSubscription: null,
+          currentUser: null,
+          authInitialized: true,
+          groups: [],
+          messages: [],
+          friendRequests: [],
+          friends: [],
+          mutedUsers: [],
+          blockedUsers: [],
+          onlineUsers: [],
+          globalSubscription: null,
+          activeCallSession: null,
+          callParticipants: [],
+          groupCallSubscription: null,
         });
       }
     });
   },
 
-  initRealtimeGlobal: () => {
+  initRealtimeGlobal: async () => {
     const user = get().currentUser;
     if (!user) return;
 
-    // Clean up existing if any
+    // Avoid duplicate subscriptions if already joined or joining
     const existing = get().globalSubscription;
-    if (existing) {
-      supabase.removeChannel(existing);
+    if (existing && (existing.state === 'joined' || existing.state === 'joining')) {
+      return;
+    }
+
+    // Clean up any stale instances of global_system from supabase channels map
+    try {
+      const activeChannels = supabase.getChannels() || [];
+      for (const ch of activeChannels) {
+        if (ch.topic === 'realtime:global_system' || ch.topic === 'global_system') {
+          await supabase.removeChannel(ch);
+        }
+      }
+      if (existing) {
+        await supabase.removeChannel(existing);
+      }
+    } catch (e) {
+      console.warn('[Rakcha Realtime] Cleanup notice:', e);
     }
 
     const channel = supabase.channel('global_system')
       // Presence for online status
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const onlineIds = Object.values(state).map((presenceArray) => presenceArray[0].user_id);
+        const onlineIds = Object.values(state)
+          .map((presenceArray) => presenceArray[0]?.user_id)
+          .filter(Boolean);
         set({ onlineUsers: onlineIds });
       })
       // Listen for DM creation broadcasts
       .on('broadcast', { event: 'dm_created' }, async ({ payload }) => {
         if (payload && payload.targetUserId === user.id && payload.joinCode) {
-           await supabase.rpc('join_group_by_code', { code_input: payload.joinCode }).then().catch(() => {});
-           get().fetchUserGroups();
+          await supabase.rpc('join_group_by_code', { code_input: payload.joinCode }).catch(() => {});
+          get().fetchUserGroups();
         }
       })
       // Listen for incoming call
@@ -221,20 +274,20 @@ export const useRakchaStore = create((set, get) => ({
         }
       })
       // Listen for new friend requests or updates
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `receiver_id=eq.${user.id}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `receiver_id=eq.${user.id}` }, () => {
         get().fetchFriendRequests();
         get().fetchFriends();
       })
       // Listen to accepted friend requests (when YOU sent it and they accept)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `sender_id=eq.${user.id}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `sender_id=eq.${user.id}` }, () => {
         get().fetchFriendRequests();
         get().fetchFriends();
       })
-      // Listen to new group memberships (e.g. accepted DM, or added to group)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `user_id=eq.${user.id}` }, (payload) => {
+      // Listen to new group memberships
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_members', filter: `user_id=eq.${user.id}` }, () => {
         get().fetchUserGroups();
       })
-      // Listen to deleted group memberships (e.g. unfriend)
+      // Listen to deleted group memberships
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'group_members', filter: `user_id=eq.${user.id}` }, (payload) => {
         get().fetchUserGroups();
         if (get().activeGroupId === payload.old.group_id) {
@@ -242,25 +295,28 @@ export const useRakchaStore = create((set, get) => ({
         }
       })
       // Listen to muted_users updates
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'muted_users', filter: `user_id=eq.${user.id}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'muted_users', filter: `user_id=eq.${user.id}` }, () => {
         get().fetchMutedUsers();
       })
       // Listen to blocked_users updates
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocker_id=eq.${user.id}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users', filter: `blocker_id=eq.${user.id}` }, () => {
         get().fetchBlockedUsers();
         get().fetchFriends();
         get().fetchUserGroups();
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({ user_id: user.id });
-        }
       });
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        try {
+          await channel.track({ user_id: user.id });
+        } catch (err) {}
+      }
+    });
 
     set({ globalSubscription: channel });
   },
 
-  // Friend Requests
+  // ── Friend Requests ──────────────────────────────────────────────────────
   fetchFriendRequests: async () => {
     const user = get().currentUser;
     if (!user) return;
@@ -286,7 +342,7 @@ export const useRakchaStore = create((set, get) => ({
     if (error || !requests) return;
     
     // Extract the other profile
-    const friendsList = requests.map(req => {
+    const friendsList = requests.map((req) => {
       const isSender = req.sender_id === user.id;
       const friendProfile = isSender ? req.receiver : req.sender;
       return {
@@ -302,7 +358,6 @@ export const useRakchaStore = create((set, get) => ({
     const currentUser = get().currentUser;
     if (!currentUser || !query || query.trim() === '') return [];
     
-    // Search strictly by username as requested
     const cleanQuery = query.replace('@', '').trim();
     const { data, error } = await supabase
       .from('profiles')
@@ -321,9 +376,8 @@ export const useRakchaStore = create((set, get) => ({
       
     if (reqErr) throw reqErr;
 
-    return data.map(user => {
-      // Find any relationship with this user
-      const relationship = requests?.find(r => r.sender_id === user.id || r.receiver_id === user.id);
+    return (data || []).map((user) => {
+      const relationship = requests?.find((r) => r.sender_id === user.id || r.receiver_id === user.id);
       
       let relationshipStatus = 'none';
       if (relationship) {
@@ -336,7 +390,7 @@ export const useRakchaStore = create((set, get) => ({
       return {
         ...user,
         relationshipStatus,
-        requestId: relationship?.id // Store request ID if needed
+        requestId: relationship?.id
       };
     });
   },
@@ -345,8 +399,7 @@ export const useRakchaStore = create((set, get) => ({
     const currentUser = get().currentUser;
     if (targetId === currentUser.id) throw new Error('You cannot send a friend request to yourself.');
 
-    // Check if a pending request already exists
-    const { data: existing, error: fetchErr } = await supabase
+    const { data: existing } = await supabase
       .from('friend_requests')
       .select('id, status')
       .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${targetId}),and(sender_id.eq.${targetId},receiver_id.eq.${currentUser.id})`)
@@ -370,7 +423,6 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   acceptFriendRequest: async (requestId) => {
-    // Fetch the request first to get the sender's id
     const { data: req, error: reqErr } = await supabase
       .from('friend_requests')
       .select('sender_id, receiver_id')
@@ -378,7 +430,6 @@ export const useRakchaStore = create((set, get) => ({
       .single();
     if (reqErr) throw reqErr;
 
-    // Mark as accepted
     const { error } = await supabase
       .from('friend_requests')
       .update({ status: 'accepted' })
@@ -388,18 +439,14 @@ export const useRakchaStore = create((set, get) => ({
     let newGroupId = null;
     const currentUser = get().currentUser;
     
-    // Generate deterministic join_code (still useful as unique identifier)
     const sortedIds = [currentUser.id, req.sender_id].sort();
     const joinCode = `DM_${sortedIds[0].substring(0,8)}_${sortedIds[1].substring(0,8)}`.toUpperCase();
 
-    // Check if the group already exists via code
-    const { data: existingGroup } = await supabase.from('groups').select('id').eq('code', joinCode).single();
+    const { data: existingGroup } = await supabase.from('groups').select('id').eq('code', joinCode).maybeSingle();
 
     if (existingGroup) {
       newGroupId = existingGroup.id;
     } else {
-      // Create the DM group with user1_id and user2_id explicitly set
-      // Fetch other user's name
       const { data: otherUser } = await supabase.from('profiles').select('display_name, username').eq('id', req.sender_id).single();
       const otherName = otherUser?.display_name || otherUser?.username || 'User';
 
@@ -421,10 +468,8 @@ export const useRakchaStore = create((set, get) => ({
         throw new Error(`Failed to create conversation group: ${groupErr.message}`);
       }
       newGroupId = newGroup.id;
-      // Note: We DO NOT add members to `group_members` for DMs anymore
     }
 
-    // Broadcast to the other user so they can join immediately if online
     const channel = get().globalSubscription;
     if (channel) {
       channel.send({
@@ -435,7 +480,6 @@ export const useRakchaStore = create((set, get) => ({
     }
 
     if (newGroupId) {
-      // Navigate to the new DM immediately
       await get().fetchUserGroups();
       set({ activeGroupId: newGroupId });
     }
@@ -448,7 +492,6 @@ export const useRakchaStore = create((set, get) => ({
     const currentUser = get().currentUser;
     if (!currentUser) return;
     
-    // Find the DM room
     const { data: dmGroup } = await supabase
       .from('groups')
       .select('id')
@@ -464,7 +507,6 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   removeFriend: async (friendId) => {
-    // Legacy alias, defer to unfriendUser
     return get().unfriendUser(friendId);
   },
 
@@ -479,8 +521,6 @@ export const useRakchaStore = create((set, get) => ({
     get().showToast('Friend removed and chat deleted.', 'info');
   },
 
-  // Note: the canonical joinGroup implementation is further below, near the leaveGroup/joinGroup section.
-
   regenerateGroupCode: async (groupId) => {
     const { data, error } = await supabase.rpc('regenerate_group_code', { p_group_id: groupId });
     if (error) {
@@ -488,9 +528,8 @@ export const useRakchaStore = create((set, get) => ({
       throw error;
     }
     if (data && data.success) {
-      // Update local state instantly
       set((state) => ({
-        groups: state.groups.map(g => g.id === groupId ? { ...g, code: data.new_code } : g)
+        groups: state.groups.map((g) => (g.id === groupId ? { ...g, code: data.new_code } : g))
       }));
       get().showToast('Group code regenerated successfully.', 'success');
       return data.new_code;
@@ -505,7 +544,7 @@ export const useRakchaStore = create((set, get) => ({
       .select('muted_user_id')
       .eq('user_id', user.id);
     if (!error && data) {
-      set({ mutedUsers: data.map(r => r.muted_user_id) });
+      set({ mutedUsers: data.map((r) => r.muted_user_id) });
     }
   },
 
@@ -530,12 +569,14 @@ export const useRakchaStore = create((set, get) => ({
     get().showToast('User unmuted.', 'info');
   },
 
-  // ── Settings & Personalization Actions ─────────────────────────────────────
+  // ── Settings & Personalization Actions ───────────────────────────────────
   updateSettings: (partial) => {
     const current = get().settings || DEFAULT_SETTINGS;
     const updated = { ...current, ...partial };
     try {
-      localStorage.setItem('rakcha_settings', JSON.stringify(updated));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('rakcha_settings', JSON.stringify(updated));
+      }
     } catch (e) {}
     set({ settings: updated });
     get().applySettingsToDOM();
@@ -552,19 +593,20 @@ export const useRakchaStore = create((set, get) => ({
 
   clearLocalMediaCache: () => {
     try {
-      sessionStorage.clear();
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+      }
       get().showToast('Local media cache purged.', 'success');
     } catch (e) {
       get().showToast('Failed to purge media cache.', 'error');
     }
   },
 
-  // ── Blocked Users Actions ──────────────────────────────────────────────────
+  // ── Blocked Users Actions ────────────────────────────────────────────────
   fetchBlockedUsers: async () => {
     const user = get().currentUser;
     if (!user) return;
     try {
-      // Direct select and populate profile
       const { data: rawBlocks, error: rawError } = await supabase
         .from('blocked_users')
         .select('*')
@@ -575,14 +617,14 @@ export const useRakchaStore = create((set, get) => ({
           set({ blockedUsers: [] });
           return;
         }
-        const blockedIds = rawBlocks.map(b => b.blocked_id);
+        const blockedIds = rawBlocks.map((b) => b.blocked_id);
         const { data: profiles } = await supabase
           .from('profiles')
           .select('id, username, display_name, avatar_url, custom_status')
           .in('id', blockedIds);
 
-        const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-        const merged = rawBlocks.map(b => ({
+        const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+        const merged = rawBlocks.map((b) => ({
           ...b,
           profile: profileMap.get(b.blocked_id) || { id: b.blocked_id, display_name: 'Rakcha User', username: 'user' }
         }));
@@ -602,15 +644,12 @@ export const useRakchaStore = create((set, get) => ({
     }
 
     try {
-      // 1. Try RPC first
       const { error: rpcError } = await supabase.rpc('block_user', { target_user_id: targetId });
       if (rpcError) {
-        // Fallback: direct table insert
         await supabase
           .from('blocked_users')
           .insert({ blocker_id: user.id, blocked_id: targetId });
         
-        // Auto-unfriend fallback
         await supabase
           .from('friend_requests')
           .delete()
@@ -641,8 +680,8 @@ export const useRakchaStore = create((set, get) => ({
           .match({ blocker_id: user.id, blocked_id: targetId });
       }
 
-      set(state => ({
-        blockedUsers: state.blockedUsers.filter(b => b.blocked_id !== targetId && b.id !== targetId)
+      set((state) => ({
+        blockedUsers: state.blockedUsers.filter((b) => b.blocked_id !== targetId && b.id !== targetId)
       }));
       await get().fetchBlockedUsers();
       get().showToast('User unblocked successfully', 'success');
@@ -655,7 +694,7 @@ export const useRakchaStore = create((set, get) => ({
   isUserBlocked: (targetId) => {
     if (!targetId) return false;
     const { blockedUsers } = get();
-    return blockedUsers.some(b => b.blocked_id === targetId || b.id === targetId);
+    return blockedUsers.some((b) => b.blocked_id === targetId || b.id === targetId);
   },
 
   declineFriendRequest: async (requestId) => {
@@ -680,17 +719,44 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   signUp: async ({ email, password, username, displayName }) => {
+    const formattedUsername = username ? (username.startsWith('@') ? username : `@${username}`) : username;
+    const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/#/email-confirmed` : undefined;
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          username,
+          username: formattedUsername,
           display_name: displayName,
-        }
+        },
+        emailRedirectTo: redirectUrl
       }
     });
     if (error) throw error;
+    
+    if (email) {
+      get().setPendingEmail(email);
+    }
+    return data;
+  },
+
+  resendConfirmationEmail: async (targetEmail) => {
+    const emailToUse = (targetEmail || get().pendingEmail || '').trim();
+    if (!emailToUse) {
+      throw new Error('Please enter a valid email address.');
+    }
+    const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/#/email-confirmed` : undefined;
+    const { data, error } = await supabase.auth.resend({
+      type: 'signup',
+      email: emailToUse,
+      options: {
+        emailRedirectTo: redirectUrl
+      }
+    });
+    if (error) throw error;
+    get().setPendingEmail(emailToUse);
+    get().showToast('Confirmation email resent! Please check your inbox.', 'success');
     return data;
   },
 
@@ -704,12 +770,49 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   signOut: async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    // UI redirect should handle hash change
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+      }
+      const { globalSubscription, groupCallSubscription, activeGroupSubscription } = get();
+      if (globalSubscription) supabase.removeChannel(globalSubscription);
+      if (groupCallSubscription) supabase.removeChannel(groupCallSubscription);
+      if (activeGroupSubscription) supabase.removeChannel(activeGroupSubscription);
+      
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.warn("Supabase signOut error:", error);
+      }
+    } catch (err) {
+      console.warn("signOut encountered exception:", err);
+    } finally {
+      set({
+        currentUser: null,
+        session: null,
+        groups: [],
+        messages: [],
+        friendRequests: [],
+        friends: [],
+        mutedUsers: [],
+        blockedUsers: [],
+        onlineUsers: [],
+        globalSubscription: null,
+        groupCallSubscription: null,
+        activeGroupSubscription: null,
+        activeCallSession: null,
+        callParticipants: [],
+        activeGroupId: null,
+        activeCallGroupId: null,
+        incomingCall: null,
+        incomingGroupCall: null,
+        searchQuery: '',
+      });
+      setHash('landing');
+      set({ currentPage: 'landing' });
+    }
   },
 
-  updateProfile: async ({ displayName, username, avatarUrl, avatarFile, status, customStatus, bannerColor }) => {
+  updateProfile: async ({ displayName, username, avatarUrl, avatarFile, status, customStatus, bannerColor, is_onboarded, isOnboarded }) => {
     let user = get().currentUser;
     if (!user) {
       const { data: { session } } = await supabase.auth.getSession();
@@ -723,7 +826,7 @@ export const useRakchaStore = create((set, get) => ({
       const fileName = `${user.id}-${Math.random()}.${fileExt}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, avatarFile);
+        .upload(fileName, avatarFile, { upsert: true });
         
       if (!uploadError && uploadData) {
         const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
@@ -733,11 +836,16 @@ export const useRakchaStore = create((set, get) => ({
 
     const updateData = {};
     if (displayName !== undefined) updateData.display_name = displayName;
-    if (username !== undefined) updateData.username = username;
+    if (username !== undefined) {
+      updateData.username = username ? (username.startsWith('@') ? username : `@${username}`) : username;
+    }
     if (status !== undefined) updateData.status = status;
     if (customStatus !== undefined) updateData.custom_status = customStatus;
     if (finalAvatarUrl !== undefined) updateData.avatar_url = finalAvatarUrl;
     if (bannerColor !== undefined) updateData.banner_color = bannerColor;
+    if (is_onboarded !== undefined || isOnboarded !== undefined) {
+      updateData.is_onboarded = is_onboarded !== undefined ? is_onboarded : isOnboarded;
+    }
 
     let updatedProfile = null;
     try {
@@ -750,7 +858,6 @@ export const useRakchaStore = create((set, get) => ({
       if (error) throw error;
       updatedProfile = data;
     } catch (err) {
-      // If banner_color column doesn't exist yet in Supabase, retry without it
       if (err?.message?.includes('banner_color') || err?.code === '42703') {
         delete updateData.banner_color;
         const { data, error: retryErr } = await supabase
@@ -766,23 +873,22 @@ export const useRakchaStore = create((set, get) => ({
       }
     }
 
-    if (bannerColor) {
+    if (bannerColor && typeof localStorage !== 'undefined') {
       localStorage.setItem(`rakcha_banner_${user.id}`, bannerColor);
     }
     const finalProfile = {
       ...get().currentUser,
       ...updatedProfile,
-      banner_color: bannerColor || updatedProfile?.banner_color || localStorage.getItem(`rakcha_banner_${user.id}`) || 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)'
+      banner_color: bannerColor || updatedProfile?.banner_color || (typeof localStorage !== 'undefined' ? localStorage.getItem(`rakcha_banner_${user.id}`) : null) || 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)'
     };
     set({ currentUser: finalProfile });
+    return finalProfile;
   },
 
-  // Groups Management
+  // ── Groups Management ────────────────────────────────────────────────────
   fetchUserGroups: async () => {
     const user = get().currentUser;
     if (!user) return;
-    
-    // We no longer automatically join `group_members` for DMs since they use user1_id and user2_id
     
     // Fetch normal groups
     const { data: groupMembersData, error: gmError } = await supabase
@@ -821,17 +927,16 @@ export const useRakchaStore = create((set, get) => ({
     const allGroups = [];
 
     if (groupMembersData) {
-      groupMembersData.forEach(item => {
+      groupMembersData.forEach((item) => {
         const g = item.groups;
-        if (g && g.type === 'group') { // filter out legacy DMs if any just in case
+        if (g && g.type === 'group') {
           allGroups.push(g);
         }
       });
     }
 
     if (dmData) {
-      dmData.forEach(g => {
-        // Find the "other" user
+      dmData.forEach((g) => {
         const otherMember = (g.user1 && g.user1.id !== user.id) ? g.user1 : 
                             (g.user2 && g.user2.id !== user.id) ? g.user2 : null;
         if (otherMember) {
@@ -883,7 +988,6 @@ export const useRakchaStore = create((set, get) => ({
     
     await get().fetchUserGroups();
     if (newGroup) {
-      // In some cases RPC might return an array if not configured as single row
       const groupId = Array.isArray(newGroup) ? newGroup[0]?.id : newGroup.id;
       if (groupId) set({ activeGroupId: groupId });
     }
@@ -894,15 +998,12 @@ export const useRakchaStore = create((set, get) => ({
     const user = get().currentUser;
     if (!user) return null;
     
-    // Check if already exists in state
-    const existing = get().groups.find(g => g.type === 'private' && (g.user1_id === targetUserId || g.user2_id === targetUserId));
+    const existing = get().groups.find((g) => g.type === 'private' && (g.user1_id === targetUserId || g.user2_id === targetUserId));
     if (existing) return existing;
 
-    // Generate consistent code based on sorted UUIDs
     const sorted = [user.id, targetUserId].sort();
     const code = 'DM_' + sorted[0].substring(0,8).toUpperCase() + '_' + sorted[1].substring(0,8).toUpperCase();
 
-    // Insert new private group
     const { data: newGroup, error: insertError } = await supabase
       .from('groups')
       .insert({
@@ -918,7 +1019,7 @@ export const useRakchaStore = create((set, get) => ({
       .single();
 
     if (insertError) {
-      if (insertError.code === '23505') { // Unique violation means it already exists
+      if (insertError.code === '23505') {
         const { data: existingGroup } = await supabase.from('groups').select('*').eq('code', code).single();
         if (existingGroup) {
           await get().fetchUserGroups();
@@ -928,7 +1029,6 @@ export const useRakchaStore = create((set, get) => ({
       throw insertError;
     }
 
-    // Broadcast to the other user so they join it
     const { globalSubscription } = get();
     if (globalSubscription) {
       globalSubscription.send({
@@ -948,9 +1048,6 @@ export const useRakchaStore = create((set, get) => ({
     if (error) throw error;
 
     await get().fetchUserGroups();
-
-    // The RPC returns { id: uuid, success: true, already_member: boolean }
-    // If it returns an array (which sometimes happens with Supabase RPCs depending on setup), handle it safely.
     const res = Array.isArray(result) ? result[0] : result;
 
     if (res && res.id) {
@@ -958,8 +1055,6 @@ export const useRakchaStore = create((set, get) => ({
     }
     return res;
   },
-
-
 
   leaveGroup: async (groupId) => {
     const user = get().currentUser;
@@ -981,10 +1076,10 @@ export const useRakchaStore = create((set, get) => ({
       .select('role, profiles(*)')
       .eq('group_id', groupId);
     if (error) throw error;
-    return data.map(r => ({ ...r.profiles, groupRole: r.role }));
+    return (data || []).map((r) => ({ ...r.profiles, groupRole: r.role }));
   },
 
-  // Messages & Realtime
+  // ── Messages & Realtime ──────────────────────────────────────────────────
   fetchMessages: async (groupId) => {
     const { data, error } = await supabase
       .from('messages')
@@ -1008,7 +1103,7 @@ export const useRakchaStore = create((set, get) => ({
       return;
     }
     
-    set({ messages: data });
+    set({ messages: data || [] });
   },
 
   sendMessage: async ({ groupId, content, file, waveform, duration, replyToId }) => {
@@ -1017,20 +1112,42 @@ export const useRakchaStore = create((set, get) => ({
     
     let fileUrl = null;
     let fileType = null;
+    let finalContent = content;
+
     if (file) {
-      const isAudio = file.type?.startsWith('audio');
-      const fileExt = file.name.split('.').pop();
-      const prefix = isAudio ? 'voice_' : '';
-      const fileName = `${prefix}${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('attachments')
-        .upload(fileName, file);
-        
+      const isAudio = file.type?.startsWith('audio') || file.name?.startsWith('voice_');
+      const fileExt = file.name?.split('.').pop() || (isAudio ? 'webm' : 'bin');
+      
+      let bucket = 'chat-media';
+      let filePath = isAudio
+        ? `vocals/voice_${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
+        : `attachments/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+      let { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        bucket = 'attachments';
+        filePath = isAudio
+          ? `voice_${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
+          : `${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+        const fallbackRes = await supabase.storage
+          .from(bucket)
+          .upload(filePath, file, { upsert: true });
+
+        uploadData = fallbackRes.data;
+        uploadError = fallbackRes.error;
+      }
+
       if (!uploadError && uploadData) {
-        const { data: publicUrlData } = supabase.storage.from('attachments').getPublicUrl(fileName);
+        const { data: publicUrlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
         fileUrl = publicUrlData.publicUrl;
-        // Store clean base media type (no codec suffix) so startsWith('audio') always works
-        fileType = isAudio ? 'audio' : file.type;
+        fileType = isAudio ? 'audio' : (file.type?.startsWith('image') ? 'image' : 'file');
+        if (isAudio && (!finalContent || !finalContent.trim())) {
+          finalContent = '🎤 Voice message';
+        }
       }
     }
     
@@ -1039,7 +1156,7 @@ export const useRakchaStore = create((set, get) => ({
       .insert({
         group_id: groupId,
         sender_id: user.id,
-        content,
+        content: finalContent,
         media_url: fileUrl,
         media_type: fileType,
         waveform,
@@ -1052,15 +1169,15 @@ export const useRakchaStore = create((set, get) => ({
 
   initiateCall: (groupId, targetUserId, callType) => {
     const { groups, currentUser } = get();
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find((g) => g.id === groupId);
 
-    // ── Group call: use server-managed session flow ──────────────────────────
+    // Group call: use server-managed session flow
     if (group?.type === 'group') {
       get().startGroupCall(groupId, callType);
       return;
     }
 
-    // ── DM call: existing P2P broadcast flow (unchanged) ────────────────────
+    // DM call: existing P2P broadcast flow
     const user = currentUser;
     const channel = get().globalSubscription;
     if (channel) {
@@ -1078,12 +1195,13 @@ export const useRakchaStore = create((set, get) => ({
       });
     }
 
-    sessionStorage.setItem('activeCall', JSON.stringify({ groupId, callType, isCaller: true }));
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('activeCall', JSON.stringify({ groupId, callType, isCaller: true }));
+    }
     set({ activeCallGroupId: groupId, activeCallType: callType, isCaller: true, isCameraOn: callType === 'video' });
   },
 
-  // ── Group Call Actions ──────────────────────────────────────────────────────
-
+  // ── Group Call Actions ───────────────────────────────────────────────────
   startGroupCall: async (groupId, callType = 'video') => {
     const { data, error } = await supabase.rpc('start_group_call', {
       p_group_id: groupId,
@@ -1095,14 +1213,13 @@ export const useRakchaStore = create((set, get) => ({
       return;
     }
     const sessionId = data.session_id;
-    // Fetch full session details
     await get().fetchActiveCallSession(groupId);
     await get().fetchCallParticipants(sessionId);
     set({ activeCallGroupId: groupId, activeCallType: callType, isCaller: true, isCameraOn: callType === 'video' });
   },
 
   joinGroupCall: async (sessionId, groupId, callType = 'video') => {
-    const { data, error } = await supabase.rpc('join_call_session', { p_session_id: sessionId });
+    const { error } = await supabase.rpc('join_call_session', { p_session_id: sessionId });
     if (error) {
       console.error('join_call_session error:', error);
       get().showToast('Could not join call.', 'error');
@@ -1114,11 +1231,12 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   leaveGroupCall: async (sessionId) => {
-    const { data, error } = await supabase.rpc('leave_call_session', { p_session_id: sessionId });
+    const { error } = await supabase.rpc('leave_call_session', { p_session_id: sessionId });
     if (error) console.error('leave_call_session error:', error);
-    sessionStorage.removeItem('activeCall');
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('activeCall');
+    }
     set({ activeCallGroupId: null, activeCallSession: null, callParticipants: [], isCaller: false, incomingGroupCall: null });
-    // Refresh messages so the call_end pill appears
     const { activeGroupId } = get();
     if (activeGroupId) get().fetchMessages(activeGroupId);
   },
@@ -1138,7 +1256,7 @@ export const useRakchaStore = create((set, get) => ({
       .eq('call_session_id', sessionId)
       .eq('status', 'joined');
     if (error) { console.error('fetchCallParticipants error:', error); return; }
-    const participants = (data || []).map(r => ({
+    const participants = (data || []).map((r) => ({
       user_id: r.user_id,
       ...r.profiles,
     }));
@@ -1146,7 +1264,6 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   subscribeToCallSession: (groupId) => {
-    // Clean up previous subscription
     const existing = get().groupCallSubscription;
     if (existing) supabase.removeChannel(existing);
 
@@ -1163,9 +1280,7 @@ export const useRakchaStore = create((set, get) => ({
           await get().fetchCallParticipants(session.id);
           get().fetchMessages(groupId);
 
-          // If someone else started the call, show the accept/decline notification
           if (currentUser && session.started_by !== currentUser.id) {
-            // Fetch the group and starter info for the modal
             const { data: groupData } = await supabase
               .from('groups')
               .select('name, avatar_url')
@@ -1179,11 +1294,11 @@ export const useRakchaStore = create((set, get) => ({
 
             set({
               incomingGroupCall: {
-                session_id:   session.id,
-                group_id:     groupId,
-                group_name:   groupData?.name || 'Group',
+                session_id: session.id,
+                group_id: groupId,
+                group_name: groupData?.name || 'Group',
                 group_avatar: groupData?.avatar_url || null,
-                call_type:    session.call_type,
+                call_type: session.call_type,
                 starter_name: starterData?.display_name || starterData?.username || 'Someone',
               }
             });
@@ -1194,7 +1309,6 @@ export const useRakchaStore = create((set, get) => ({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'call_sessions', filter: `group_id=eq.${groupId}` },
         async (payload) => {
-          // Session ended
           if (payload.new.ended_at) {
             set({ activeCallSession: null, callParticipants: [], incomingGroupCall: null });
           } else {
@@ -1229,7 +1343,9 @@ export const useRakchaStore = create((set, get) => ({
   acceptCall: () => {
     const incoming = get().incomingCall;
     if (incoming) {
-      sessionStorage.setItem('activeCall', JSON.stringify({ groupId: incoming.groupId, callType: incoming.callType, isCaller: false }));
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('activeCall', JSON.stringify({ groupId: incoming.groupId, callType: incoming.callType, isCaller: false }));
+      }
       set({ 
         activeGroupId: incoming.groupId,
         activeCallGroupId: incoming.groupId, 
@@ -1269,7 +1385,9 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   endCall: () => {
-    sessionStorage.removeItem('activeCall');
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('activeCall');
+    }
     set({ activeCallGroupId: null, incomingCall: null, isCaller: false, activeCallSession: null });
   },
 
@@ -1294,6 +1412,11 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   subscribeToGroup: (groupId) => {
+    const existing = get().activeGroupSubscription;
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+
     const channel = supabase
       .channel(`group-messages:${groupId}`)
       .on(
@@ -1305,7 +1428,6 @@ export const useRakchaStore = create((set, get) => ({
           filter: `group_id=eq.${groupId}`
         },
         async (payload) => {
-          // Clear typing state immediately when a message is received from a sender
           const senderId = payload.new?.sender_id;
           if (senderId) {
             set((state) => {
@@ -1353,14 +1475,13 @@ export const useRakchaStore = create((set, get) => ({
       .on('broadcast', { event: 'typing' }, (payload) => {
         const { userId, username, isTyping } = payload.payload || {};
         const currentUserId = get().currentUser?.id;
-        // Ignore self broadcasts
         if (!userId || userId === currentUserId) return;
 
         set((state) => {
           const currentTyping = state.typingUsers[groupId] || [];
           const newTyping = isTyping
-            ? [...currentTyping.filter(u => u.userId !== userId), { userId, username }]
-            : currentTyping.filter(u => u.userId !== userId);
+            ? [...currentTyping.filter((u) => u.userId !== userId), { userId, username }]
+            : currentTyping.filter((u) => u.userId !== userId);
           return { typingUsers: { ...state.typingUsers, [groupId]: newTyping } };
         });
       })
@@ -1378,7 +1499,7 @@ export const useRakchaStore = create((set, get) => ({
     const user = get().currentUser;
     const settings = get().settings;
     if (isTyping && settings && settings.showTypingIndicators === false) {
-      return; // Respect privacy settings
+      return;
     }
     if (channel && user) {
       await channel.send({

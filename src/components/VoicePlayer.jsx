@@ -1,267 +1,303 @@
 /**
  * VoicePlayer.jsx
- * Instagram/Messenger-style waveform voice message player.
- * Uses a real <audio> DOM element, pure inline styles, no external CSS deps.
+ * Instagram / Messenger-style waveform voice message player.
+ * Features interactive seeking, 1x/1.5x/2x multi-speed selector,
+ * dynamic played/unplayed waveform highlighting, and single-concurrency playback.
+ * Pure JavaScript / JSX.
  */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Play, Pause, Volume2 } from 'lucide-react';
 
-// ─── Global: only one player plays at a time ───────────────────────────────
-const registry = new Set();
-function pauseAll(exceptId) {
-  registry.forEach(p => { if (p.id !== exceptId) p.pause(); });
+// ── Global Registry: Ensures only one voice note plays at any time ──────────
+const activePlayersRegistry = new Set();
+function pauseAllExcept(activeId) {
+  activePlayersRegistry.forEach((player) => {
+    if (player.id !== activeId) {
+      player.pause();
+    }
+  });
 }
 
-let uid = 0;
+let playerInstanceCounter = 0;
 
-export function VoicePlayer({ audioUrl, waveform, duration: propDuration, isMe }) {
-  const instanceId = useRef(++uid);
-  const audioRef   = useRef(null);
-  const waveRef    = useRef(null);
-  const rafRef     = useRef(null);
+export function VoicePlayer({ audioUrl, waveform, duration: propDuration, isMe = false }) {
+  const instanceId = useRef(++playerInstanceCounter);
+  const audioRef = useRef(null);
+  const waveRef = useRef(null);
+  const rafRef = useRef(null);
 
-  const [playing,  setPlaying]  = useState(false);
-  const [current,  setCurrent]  = useState(0);
-  const [dur,      setDur]      = useState(propDuration > 0 ? propDuration : 0);
-  const [rate,     setRate]     = useState(1);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(propDuration > 0 ? propDuration : 0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Register in global registry
+  // Register in global registry for single concurrency
   useEffect(() => {
     const id = instanceId.current;
     const entry = {
       id,
       pause: () => {
-        const a = audioRef.current;
-        if (a && !a.paused) a.pause();
-        cancelAnimationFrame(rafRef.current);
-        setPlaying(false);
-      },
+        const audio = audioRef.current;
+        if (audio && !audio.paused) {
+          audio.pause();
+        }
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+        setIsPlaying(false);
+      }
     };
-    registry.add(entry);
-    return () => registry.delete(entry);
+    activePlayersRegistry.add(entry);
+    return () => {
+      activePlayersRegistry.delete(entry);
+    };
   }, []);
 
-  // On audio element mount / URL change
+  // Sync audio metadata & duration
   useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    const onMeta = () => {
-      if (isFinite(a.duration) && a.duration > 0) setDur(a.duration);
-    };
-    const onEnd = () => {
-      cancelAnimationFrame(rafRef.current);
-      setPlaying(false);
-      setCurrent(0);
+    const handleLoadedMetadata = () => {
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
     };
 
-    a.addEventListener('loadedmetadata', onMeta);
-    a.addEventListener('ended', onEnd);
+    const handleEnded = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      setIsPlaying(false);
+      setCurrentTime(0);
+      audio.currentTime = 0;
+    };
 
-    // If metadata already available
-    if (isFinite(a.duration) && a.duration > 0) setDur(a.duration);
+    const handleTimeUpdate = () => {
+      if (!isDragging) {
+        setCurrentTime(audio.currentTime);
+      }
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+
+    if (isFinite(audio.duration) && audio.duration > 0) {
+      setDuration(audio.duration);
+    }
 
     return () => {
-      a.removeEventListener('loadedmetadata', onMeta);
-      a.removeEventListener('ended', onEnd);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
     };
-  }, [audioUrl]);
+  }, [audioUrl, isDragging]);
 
   // Sync playback rate
   useEffect(() => {
-    if (audioRef.current) audioRef.current.playbackRate = rate;
-  }, [rate]);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
 
-  // rAF loop — only active while playing
+  // Animation frame ticker for smooth progress update
   const tick = useCallback(() => {
-    const a = audioRef.current;
-    if (a) setCurrent(a.currentTime);
-    rafRef.current = requestAnimationFrame(tick);
-  }, []);
+    const audio = audioRef.current;
+    if (audio && !audio.paused && !isDragging) {
+      setCurrentTime(audio.currentTime);
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  }, [isDragging]);
 
+  // Play / Pause Toggle
   const togglePlay = () => {
-    const a = audioRef.current;
-    if (!a) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    if (playing) {
-      a.pause();
-      cancelAnimationFrame(rafRef.current);
-      setPlaying(false);
+    if (isPlaying) {
+      audio.pause();
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      setIsPlaying(false);
     } else {
-      pauseAll(instanceId.current);
-      a.play()
+      pauseAllExcept(instanceId.current);
+      audio
+        .play()
         .then(() => {
-          setPlaying(true);
+          setIsPlaying(true);
           rafRef.current = requestAnimationFrame(tick);
         })
-        .catch(err => console.warn('VoicePlayer play failed:', err));
+        .catch((err) => {
+          console.warn('VoicePlayer play failed:', err);
+        });
     }
   };
 
-  // Seek by click / drag
-  const seekTo = useCallback((clientX) => {
-    const a  = audioRef.current;
-    const el = waveRef.current;
-    if (!a || !el) return;
-    const { left, width } = el.getBoundingClientRect();
-    const ratio  = Math.max(0, Math.min(1, (clientX - left) / width));
-    const target = ratio * (dur || a.duration || 1);
-    a.currentTime = target;
-    setCurrent(target);
-  }, [dur]);
-
-  const onWaveDown = (e) => {
-    e.preventDefault();
-    seekTo(e.clientX);
-
-    const onMove = (ev) => seekTo(ev.clientX);
-    const onUp   = ()  => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup',   onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup',   onUp);
+  // Speed Toggle: 1x -> 1.5x -> 2x -> 1x
+  const handleSpeedToggle = (e) => {
+    e.stopPropagation();
+    setPlaybackRate((prev) => {
+      if (prev === 1) return 1.5;
+      if (prev === 1.5) return 2;
+      return 1;
+    });
   };
 
-  // ── Build 30 bars (memoised, deterministic fallback) ──────────────────────
+  // Seek / Scrubbing handler
+  const seekToClientX = useCallback(
+    (clientX) => {
+      const audio = audioRef.current;
+      const el = waveRef.current;
+      if (!audio || !el) return;
+
+      const rect = el.getBoundingClientRect();
+      const clickRatio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const totalDur = duration > 0 ? duration : audio.duration || 1;
+      const targetTime = clickRatio * totalDur;
+
+      audio.currentTime = targetTime;
+      setCurrentTime(targetTime);
+    },
+    [duration]
+  );
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+    seekToClientX(e.clientX);
+
+    const onMouseMove = (ev) => {
+      seekToClientX(ev.clientX);
+    };
+
+    const onMouseUp = () => {
+      setIsDragging(false);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  // 30 bars waveform resolution
   const bars = useMemo(() => {
+    const BAR_COUNT = 30;
     if (Array.isArray(waveform) && waveform.length > 0) {
       const len = waveform.length;
-      return Array.from({ length: 30 }, (_, i) => {
-        const src = Math.round((i / 29) * (len - 1));
-        return Math.max(0.08, Math.min(1, Number(waveform[src]) || 0.3));
+      return Array.from({ length: BAR_COUNT }, (_, i) => {
+        const srcIdx = Math.round((i / (BAR_COUNT - 1)) * (len - 1));
+        const val = Number(waveform[srcIdx]);
+        return Math.max(0.1, Math.min(1, isNaN(val) ? 0.35 : val));
       });
     }
-    // Deterministic bell-curve + noise — looks natural
-    return Array.from({ length: 30 }, (_, i) => {
-      const x    = i / 29;
+
+    // Natural fallback bell curve with subtle variance
+    return Array.from({ length: BAR_COUNT }, (_, i) => {
+      const x = i / (BAR_COUNT - 1);
       const bell = Math.sin(x * Math.PI);
-      const det  = ((i * 7 + 13) % 17) / 34; // [0, 0.5), no Math.random()
-      return Math.max(0.08, Math.min(1, bell * 0.60 + det * 0.40));
+      const det = ((i * 7 + 11) % 17) / 34;
+      return Math.max(0.12, Math.min(1, bell * 0.65 + det * 0.35));
     });
   }, [waveform]);
 
-  const progress = dur > 0 ? Math.min(1, current / dur) : 0;
+  const progress = duration > 0 ? Math.min(1, Math.max(0, currentTime / duration)) : 0;
 
-  const fmtTime = (s) => {
-    const safe = isFinite(s) && s >= 0 ? s : 0;
-    const m    = Math.floor(safe / 60);
-    const sec  = Math.floor(safe % 60);
-    return `${m}:${sec.toString().padStart(2, '0')}`;
+  const formatTime = (seconds) => {
+    const s = isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : 0;
+    const m = Math.floor(s / 60);
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
   };
 
-  // ── Colours ────────────────────────────────────────────────────────────────
-  const FILL_ACTIVE   = isMe ? '#fff'                    : 'var(--waveform-active, #6366f1)';
-  const FILL_INACTIVE = isMe ? 'rgba(255,255,255,0.32)'  : 'rgba(99,102,241,0.25)';
-  const TEXT_COLOR    = isMe ? 'rgba(255,255,255,0.75)'  : '#9ca3af';
-  const BTN_BG        = isMe ? 'rgba(255,255,255,0.22)'  : 'var(--color-primary, #6366f1)';
-  const BTN_BG_HOVER  = isMe ? 'rgba(255,255,255,0.38)'  : 'var(--color-primary-hover, #4f46e5)';
-
   return (
-    <div style={{
-      display:    'flex',
-      alignItems: 'center',
-      gap:        10,
-      width:      248,
-      minWidth:   248,
-      userSelect: 'none',
-    }}>
-
-      {/* ── Real audio element (invisible, stays in DOM) ── */}
+    <div className="flex items-center gap-2.5 w-full max-w-[260px] sm:max-w-[280px] select-none py-0.5">
+      {/* Hidden audio element */}
       <audio
         ref={audioRef}
         src={audioUrl}
         preload="metadata"
-        style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+        className="hidden"
       />
 
-      {/* ── Play / Pause ── */}
+      {/* Round Play / Pause Button */}
       <button
+        type="button"
         onClick={togglePlay}
-        title={playing ? 'Pause' : 'Play'}
-        style={{
-          width:           38,
-          height:          38,
-          borderRadius:    '50%',
-          flexShrink:      0,
-          border:          'none',
-          cursor:          'pointer',
-          display:         'flex',
-          alignItems:      'center',
-          justifyContent:  'center',
-          background:      BTN_BG,
-          color:           '#fff',
-          boxShadow:       '0 2px 6px rgba(0,0,0,0.22)',
-          transition:      'background 120ms',
-          outline:         'none',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = BTN_BG_HOVER; }}
-        onMouseLeave={e => { e.currentTarget.style.background = BTN_BG; }}
+        title={isPlaying ? 'Pause' : 'Play'}
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-md transition-transform active:scale-95 focus:outline-none ${
+          isMe
+            ? 'bg-white/20 hover:bg-white/30 text-white'
+            : 'bg-primary hover:bg-primary/90 text-white'
+        }`}
       >
-        {playing ? <PauseIcon /> : <PlayIcon />}
+        {isPlaying ? (
+          <Pause size={16} className="fill-current" />
+        ) : (
+          <Play size={16} className="fill-current translate-x-[1px]" />
+        )}
       </button>
 
-      {/* ── Waveform column ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-
-        {/* bars */}
+      {/* Waveform & Details Container */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        {/* Interactive Waveform Bar Strip */}
         <div
           ref={waveRef}
-          onMouseDown={onWaveDown}
-          style={{
-            display:    'flex',
-            alignItems: 'center',
-            gap:        2,
-            height:     34,
-            cursor:     'pointer',
-            width:      '100%',
-          }}
+          onMouseDown={handleMouseDown}
+          className="flex items-center gap-[2px] h-8 cursor-pointer w-full group py-1"
+          title="Click or drag to seek"
         >
-          {bars.map((amp, i) => {
-            const filled = (i / bars.length) <= progress;
-            const h      = Math.round(Math.max(5, amp * 28)); // 5–28 px
+          {bars.map((amp, idx) => {
+            const isPlayed = idx / bars.length <= progress;
+            const barHeight = Math.max(4, Math.round(amp * 26)); // 4px to 26px height
+
             return (
               <div
-                key={i}
-                style={{
-                  width:           3,
-                  height:          h,
-                  borderRadius:    99,
-                  flexShrink:      0,
-                  backgroundColor: filled ? FILL_ACTIVE : FILL_INACTIVE,
-                  transition:      'background-color 50ms linear',
-                }}
+                key={idx}
+                style={{ height: `${barHeight}px` }}
+                className={`w-[3px] rounded-full transition-colors duration-75 shrink-0 ${
+                  isPlayed
+                    ? isMe
+                      ? 'bg-white'
+                      : 'bg-primary'
+                    : isMe
+                    ? 'bg-white/30 group-hover:bg-white/40'
+                    : 'bg-primary/25 group-hover:bg-primary/35'
+                }`}
               />
             );
           })}
         </div>
 
-        {/* time + speed */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{
-            fontSize:           11,
-            fontWeight:         500,
-            fontVariantNumeric: 'tabular-nums',
-            color:              TEXT_COLOR,
-            lineHeight:         1,
-          }}>
-            {fmtTime(current)} / {fmtTime(dur)}
-          </span>
-          <button
-            onClick={() => setRate(r => r === 1 ? 1.5 : r === 1.5 ? 2 : 1)}
-            style={{
-              fontSize:   10,
-              fontWeight: 700,
-              color:      TEXT_COLOR,
-              background: 'none',
-              border:     'none',
-              cursor:     'pointer',
-              padding:    '2px 4px',
-              borderRadius: 4,
-              lineHeight: 1,
-              outline:    'none',
-            }}
+        {/* Time Counter & Multi-Speed Selector */}
+        <div className="flex items-center justify-between text-[11px] font-mono leading-none">
+          <span
+            className={
+              isMe ? 'text-white/80 font-medium' : 'text-muted-foreground font-medium'
+            }
           >
-            {rate}x
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+
+          {/* Speed Modifier Button: 1x / 1.5x / 2x */}
+          <button
+            type="button"
+            onClick={handleSpeedToggle}
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded transition ${
+              isMe
+                ? 'bg-white/15 hover:bg-white/25 text-white'
+                : 'bg-surface-container hover:bg-surface-container-high text-foreground/80'
+            }`}
+            title="Toggle playback speed"
+          >
+            {playbackRate}x
           </button>
         </div>
       </div>
@@ -269,19 +305,4 @@ export function VoicePlayer({ audioUrl, waveform, duration: propDuration, isMe }
   );
 }
 
-// ─── Inline SVG icons (no lucide import needed — avoids any tree-shaking issue) ─
-function PlayIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5,3 19,12 5,21" />
-    </svg>
-  );
-}
-function PauseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="6" y="4" width="4" height="16" rx="1" />
-      <rect x="14" y="4" width="4" height="16" rx="1" />
-    </svg>
-  );
-}
+export default VoicePlayer;

@@ -244,3 +244,8 @@ export function BlockUserConfirmModal({ isOpen, userName = 'this user', onConfir
     />
   );
 }
+
+// ── Re-exports of specialized modals ─────────────────────────────────────────
+export { default as DisconnectModal } from './DisconnectModal';
+export { default as CreateGroupModal } from './CreateGroupModal';
+

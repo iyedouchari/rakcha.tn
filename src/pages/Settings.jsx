@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRakchaStore, DEFAULT_SETTINGS } from '../store/useRakchaStore';
 import RgbColorPicker from '../components/RgbColorPicker';
+import { DisconnectModal } from '../components/Modals';
 import {
   ArrowLeft,
   User,
@@ -22,10 +23,13 @@ import {
   Radio,
   Eye,
   RefreshCw,
-  HardDrive
+  HardDrive,
+  LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DEFAULT_AVATAR, normalizeUsername } from '../lib/utils';
+import UsernameInput from '../components/UsernameInput';
+import { validateUsernameFormat, checkUsernameAvailability } from '../utils/validateUsername';
 
 const BANNER_PRESETS = [
   { id: 'indigo', label: 'Indigo Core', value: 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)', color: '#6366F1' },
@@ -64,6 +68,21 @@ export default function Settings() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRgbStudio, setShowRgbStudio] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  const handleConfirmDisconnect = async () => {
+    try {
+      setIsDisconnecting(true);
+      await useRakchaStore.getState().signOut();
+    } catch (err) {
+      console.error("Settings disconnect error:", err);
+      navigate('landing');
+    } finally {
+      setIsDisconnecting(false);
+      setIsDisconnectOpen(false);
+    }
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -292,9 +311,9 @@ export default function Settings() {
 
     const rawUsername = formData.username;
     if (rawUsername) {
-      const cleanUsername = rawUsername.trim().replace(/^@+/, '');
-      if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-        showToast('Username must be 3-20 chars (lowercase letters, numbers, underscores).', 'error');
+      const validation = validateUsernameFormat(rawUsername);
+      if (!validation.isValid) {
+        showToast(validation.message, 'error');
         return;
       }
     }
@@ -303,11 +322,19 @@ export default function Settings() {
 
   const handleConfirmSave = async () => {
     const rawUsername = formData.username;
-    let cleanUsername = undefined;
+    let fullUsername = undefined;
     if (rawUsername) {
-      cleanUsername = rawUsername.trim().replace(/^@+/, '');
-      if (!/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-        showToast('Username must be 3-20 chars (lowercase letters, numbers, underscores).', 'error');
+      const validation = validateUsernameFormat(rawUsername);
+      if (!validation.isValid) {
+        showToast(validation.message, 'error');
+        setShowConfirmModal(false);
+        return;
+      }
+      fullUsername = validation.fullUsername;
+
+      const availability = await checkUsernameAvailability(fullUsername, currentUser?.id);
+      if (!availability.isAvailable) {
+        showToast(availability.message || 'This username is already taken. Please choose another.', 'error');
         setShowConfirmModal(false);
         return;
       }
@@ -317,7 +344,7 @@ export default function Settings() {
       setIsSaving(true);
       await updateProfile({
         displayName: formData.name,
-        username: cleanUsername,
+        username: fullUsername,
         customStatus: formData.bio,
         bannerColor: formData.bannerColor
       });
@@ -391,6 +418,17 @@ export default function Settings() {
             );
           })}
         </nav>
+
+        <div className="p-4 border-t border-outline-variant/10 mt-auto">
+          <button
+            type="button"
+            onClick={() => setIsDisconnectOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 font-medium transition"
+          >
+            <LogOut size={18} />
+            <span>Log Out</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main Settings Content */}
@@ -501,16 +539,13 @@ export default function Settings() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Username</label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3.5 text-muted-foreground font-mono font-bold">@</span>
-                      <input
-                        value={formData.username}
-                        onChange={e => setFormData({ ...formData, username: e.target.value.toLowerCase() })}
-                        className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3.5 pl-8 text-foreground font-mono focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition"
-                        placeholder="username"
-                      />
-                    </div>
+                    <UsernameInput
+                      value={formData.username}
+                      onChange={val => setFormData({ ...formData, username: val })}
+                      currentUserId={currentUser?.id}
+                      label="Username"
+                      id="settings-username-input"
+                    />
                   </div>
                 </div>
 
@@ -1136,6 +1171,14 @@ export default function Settings() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Dedicated Confirmation Modal for Logging Out */}
+      <DisconnectModal
+        isOpen={isDisconnectOpen}
+        isLoading={isDisconnecting}
+        onClose={() => setIsDisconnectOpen(false)}
+        onConfirm={handleConfirmDisconnect}
+      />
     </div>
   );
 }

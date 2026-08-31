@@ -18,6 +18,8 @@ import {
   Sparkles
 } from 'lucide-react';
 import AnimatedBackground from './AnimatedBackground';
+import UsernameInput from './UsernameInput';
+import { validateUsernameFormat, checkUsernameAvailability } from '../utils/validateUsername';
 
 export default function AuthModal({ initialMode = 'login', isModal = false, onClose }) {
   const navigate = useRakchaStore((s) => s.navigate);
@@ -138,13 +140,13 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
       return;
     }
 
-    const cleanUsername = username.trim().toLowerCase().replace(/^@+/, '');
-    if (!cleanUsername || !/^[a-z0-9_]{3,20}$/.test(cleanUsername)) {
-      setError(
-        'Username must be 3-20 characters long and contain only lowercase letters, numbers, and underscores.'
-      );
+    const usernameValidation = validateUsernameFormat(username);
+    if (!usernameValidation.isValid) {
+      setError(usernameValidation.message);
       return;
     }
+
+    const fullUsername = usernameValidation.fullUsername;
 
     if (!bio.trim()) {
       setError('Please write a short bio.');
@@ -153,10 +155,19 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
 
     try {
       setLoading(true);
+
+      // Verify availability
+      const availability = await checkUsernameAvailability(fullUsername);
+      if (!availability.isAvailable) {
+        setError(availability.message || 'This username is already taken. Please choose another.');
+        setLoading(false);
+        return;
+      }
+
       const data = await signUp({
         email: email.trim(),
         password,
-        username: cleanUsername,
+        username: fullUsername,
         displayName: displayName.trim()
       });
 
@@ -164,7 +175,7 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
         useRakchaStore.setState({ session: data.session });
         await updateProfile({
           displayName: displayName.trim(),
-          username: cleanUsername,
+          username: fullUsername,
           customStatus: bio.trim(),
           avatarFile
         });
@@ -598,36 +609,15 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
             </div>
 
             {/* Username */}
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <AtSign size={13} className={focusedField === 'username' ? 'text-primary' : 'text-muted-foreground'} />
-                Username Handle
-              </label>
-              <div
-                className={`relative rounded-xl border transition-all duration-300 flex items-center ${
-                  focusedField === 'username'
-                    ? 'border-primary/80 ring-2 ring-primary/20 bg-[#161820]'
-                    : 'border-white/[0.08] bg-[#0E1015]/90 hover:border-white/[0.15]'
-                }`}
-              >
-                <span className="pl-3 text-muted-foreground font-mono text-sm font-bold select-none">
-                  @
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value.toLowerCase());
-                    setError('');
-                  }}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="alex_vance"
-                  className="w-full bg-transparent p-3 pl-1.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-sm font-mono font-medium rounded-xl"
-                />
-              </div>
-            </div>
+            <UsernameInput
+              value={username}
+              onChange={(val) => {
+                setUsername(val);
+                setError('');
+              }}
+              required
+              id="auth-register-username"
+            />
 
             {/* Bio */}
             <div>

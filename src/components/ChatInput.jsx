@@ -4,10 +4,12 @@ import EmojiPicker from 'emoji-picker-react';
 import { cn } from '../lib/utils';
 import { useRakchaStore } from '../store/useRakchaStore';
 
+import VoiceRecorder from './VoiceRecorder';
+
 /**
  * Pure JavaScript ChatInput component
  * Handles debounced typing triggers, instant resets on submit/blur/empty,
- * file uploads, emoji picker, and voice recording.
+ * file uploads, emoji picker, and voice recording with VoiceRecorder.
  */
 export function ChatInput({
   group,
@@ -21,19 +23,15 @@ export function ChatInput({
   const [file, setFile] = useState(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
 
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const timerIntervalRef = useRef(null);
   const textareaRef = useRef(null);
 
   // Focus textarea when group changes or reply opens
   useEffect(() => {
-    if (textareaRef.current) {
+    if (textareaRef.current && !isRecording) {
       textareaRef.current.focus();
     }
-  }, [group?.id, replyTo]);
+  }, [group?.id, replyTo, isRecording]);
 
   // Input change handler with active text trigger
   const handleChange = (e) => {
@@ -67,64 +65,12 @@ export function ChatInput({
     if (onClearReply) onClearReply();
   };
 
-  // Voice recording handlers
-  const startRecording = async () => {
-    try {
-      if (onStopTyping) onStopTyping();
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      timerIntervalRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-    } catch {
-      useRakchaStore.getState().showToast('Could not access microphone.', 'error');
-    }
-  };
-
-  const stopRecording = (cancel = false) => {
-    if (!mediaRecorderRef.current || !isRecording) return;
-    mediaRecorderRef.current.onstop = async () => {
-      const tracks = mediaRecorderRef.current.stream.getTracks();
-      tracks.forEach(t => t.stop());
-      if (!cancel && audioChunksRef.current.length > 0) {
-        const mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
-        const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-        const audioFile = new File([blob], `voice_message.${ext}`, { type: mimeType });
-
-        let waveform = [];
-        let dur = 0;
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
-          dur = buf.duration;
-          const raw = buf.getChannelData(0);
-          const samples = 30;
-          const blockSize = Math.floor(raw.length / samples);
-          for (let i = 0; i < samples; i++) {
-            let sum = 0;
-            for (let j = 0; j < blockSize; j++) sum += Math.abs(raw[i * blockSize + j]);
-            waveform.push(sum / blockSize);
-          }
-          const max = Math.max(...waveform, 0.001);
-          waveform = waveform.map(n => n / max);
-        } catch (err) {
-          console.error('Waveform error', err);
-        }
-        onSendMessage('', audioFile, waveform, dur, replyTo?.id);
-        if (onClearReply) onClearReply();
-      }
-      setIsRecording(false);
-      setRecordingTime(0);
-      audioChunksRef.current = [];
-    };
-    mediaRecorderRef.current.stop();
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+  // Voice recording send handler
+  const handleSendVoice = async ({ audioFile, waveform, duration }) => {
+    if (onStopTyping) onStopTyping();
+    onSendMessage('', audioFile, waveform, duration, replyTo?.id);
+    setIsRecording(false);
+    if (onClearReply) onClearReply();
   };
 
   return (
@@ -139,36 +85,10 @@ export function ChatInput({
       )}
 
       {isRecording ? (
-        <div className={cn(
-          'border border-red-500/40 flex items-center justify-between px-4 py-3',
-          replyTo ? 'rounded-b-xl bg-surface-container' : 'rounded-2xl bg-surface-container-low'
-        )}>
-          <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
-            <span className="text-red-500 font-bold font-mono text-sm">
-              {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
-            </span>
-            <span className="text-sm text-muted-foreground">Recording…</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => stopRecording(true)}
-              className="p-2 text-muted-foreground hover:text-red-500 transition rounded-full hover:bg-red-500/10"
-              title="Cancel recording"
-            >
-              <Trash2 size={17} />
-            </button>
-            <button
-              type="button"
-              onClick={() => stopRecording(false)}
-              className="p-2 bg-primary text-white hover:bg-indigo-600 transition rounded-full shadow"
-              title="Send voice note"
-            >
-              <Send size={15} />
-            </button>
-          </div>
-        </div>
+        <VoiceRecorder
+          onSend={handleSendVoice}
+          onCancel={() => setIsRecording(false)}
+        />
       ) : (
         <form
           onSubmit={handleSubmit}

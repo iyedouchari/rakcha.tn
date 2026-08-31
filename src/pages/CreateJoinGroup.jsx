@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRakchaStore } from '../store/useRakchaStore';
-import { ArrowLeft, Users, KeyRound, Upload, CheckCircle2, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Users, KeyRound, Upload, CheckCircle2, MessageSquare, X } from 'lucide-react';
 import AnimatedBackground from '../components/AnimatedBackground';
 import { DEFAULT_AVATAR } from '../lib/utils';
 
@@ -22,6 +22,25 @@ export default function CreateJoinGroup() {
   const [joinError, setJoinError]                 = useState('');
   const [isJoining, setIsJoining]                 = useState(false);
   const [alreadyMemberGroup, setAlreadyMemberGroup] = useState(null); // { id, name, avatar_url }
+
+  // Handle Escape key to dismiss view and return to dashboard
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleBackToDashboard();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleBackToDashboard = () => {
+    setView('choice');
+    setJoinError('');
+    setInviteCode('');
+    navigate('app');
+  };
 
   // ── Code input: uppercase + XXXX-XXXX auto-format (original logic, unchanged) ─
   const handleInviteCodeChange = (e) => {
@@ -74,7 +93,7 @@ export default function CreateJoinGroup() {
         setView('already_member');
       } else {
         // Successful new join — navigate to dashboard
-        navigate('app');
+        handleBackToDashboard();
       }
     } catch (err) {
       const msg = err.message || '';
@@ -93,20 +112,28 @@ export default function CreateJoinGroup() {
     if (alreadyMemberGroup?.id) {
       setActiveGroup(alreadyMemberGroup.id);
     }
-    navigate('app');
+    handleBackToDashboard();
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans relative overflow-hidden">
       <AnimatedBackground />
 
-      <header className="p-6 relative z-10 flex items-center">
-        <button type="button" onClick={() => navigate('app')} className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition font-medium">
-          <ArrowLeft size={20} /> Back to Dashboard
+      {/* Top Header with prominent, fully clickable Back to Dashboard button */}
+      <header className="p-6 relative z-30 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBackToDashboard}
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-all duration-200 font-medium px-4 py-2 rounded-xl hover:bg-surface-container-high/80 active:scale-95 cursor-pointer relative z-30 group"
+          title="Return to Dashboard"
+          aria-label="Back to Dashboard"
+        >
+          <ArrowLeft size={20} className="group-hover:-translate-x-0.5 transition-transform" />
+          <span>Back to Dashboard</span>
         </button>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-6 relative z-10 -mt-16">
+      <main className="flex-1 flex items-center justify-center p-6 relative z-10 -mt-10">
         <div className="w-full max-w-lg bg-surface-container-low p-8 md:p-12 rounded-[2rem] shadow-2xl border border-outline-variant/20 animate-in fade-in slide-in-from-bottom-4 duration-300">
 
           {/* ── Choice ──────────────────────────────────────────────────────── */}
@@ -116,7 +143,11 @@ export default function CreateJoinGroup() {
               <p className="text-muted-foreground mb-10">Connect with friends by creating a new group or joining an existing one.</p>
 
               <div className="flex flex-col gap-4">
-                <button onClick={() => setView('create')} className="bg-surface-container-highest hover:bg-primary/20 border border-outline-variant/20 hover:border-primary/50 group flex items-center justify-between p-6 rounded-2xl transition duration-300">
+                <button
+                  type="button"
+                  onClick={() => setView('create')}
+                  className="bg-surface-container-highest hover:bg-primary/20 border border-outline-variant/20 hover:border-primary/50 group flex items-center justify-between p-6 rounded-2xl transition duration-300 cursor-pointer"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><Users size={24} /></div>
                     <div className="text-left">
@@ -127,7 +158,11 @@ export default function CreateJoinGroup() {
                   <ArrowLeft size={20} className="rotate-180 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition" />
                 </button>
 
-                <button onClick={() => setView('join')} className="bg-surface-container-highest hover:bg-[#2DD4BF]/20 border border-outline-variant/20 hover:border-[#2DD4BF]/50 group flex items-center justify-between p-6 rounded-2xl transition duration-300">
+                <button
+                  type="button"
+                  onClick={() => setView('join')}
+                  className="bg-surface-container-highest hover:bg-[#2DD4BF]/20 border border-outline-variant/20 hover:border-[#2DD4BF]/50 group flex items-center justify-between p-6 rounded-2xl transition duration-300 cursor-pointer"
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-[#2DD4BF]/10 text-[#2DD4BF] rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform"><KeyRound size={24} /></div>
                     <div className="text-left">
@@ -145,7 +180,7 @@ export default function CreateJoinGroup() {
           {view === 'create' && (
             <div>
               <div className="flex items-center mb-8">
-                <button type="button" onClick={() => setView('choice')} className="text-muted-foreground hover:text-foreground mr-4"><ArrowLeft size={24} /></button>
+                <button type="button" onClick={() => setView('choice')} className="text-muted-foreground hover:text-foreground mr-4 p-1 rounded-lg hover:bg-surface-container-highest transition-colors"><ArrowLeft size={24} /></button>
                 <h2 className="text-2xl font-heading font-bold">Create your group</h2>
               </div>
               <p className="text-muted-foreground text-sm mb-8">Give your new group a personality with a name and an icon. You can always change it later.</p>
@@ -178,9 +213,18 @@ export default function CreateJoinGroup() {
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Description</label>
                   <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What is this group about?" rows="3" className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-4 text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-sm resize-none" />
                 </div>
-                <button type="submit" className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-primary/20">
-                  Create Group
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setView('choice')}
+                    className="flex-1 bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/20 text-foreground font-bold py-4 rounded-xl transition"
+                  >
+                    Back
+                  </button>
+                  <button type="submit" className="flex-1 bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-primary/20">
+                    Create Group
+                  </button>
+                </div>
               </form>
             </div>
           )}
@@ -203,7 +247,7 @@ export default function CreateJoinGroup() {
                 </div>
               </div>
 
-              <button type="button" onClick={() => { setView('choice'); navigate('app'); }} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-primary/20 text-lg">
+              <button type="button" onClick={handleBackToDashboard} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-primary/20 text-lg">
                 Go to Dashboard
               </button>
             </div>
@@ -213,7 +257,7 @@ export default function CreateJoinGroup() {
           {view === 'join' && (
             <div>
               <div className="flex items-center mb-8">
-                <button type="button" onClick={() => { setView('choice'); setJoinError(''); setInviteCode(''); }} className="text-muted-foreground hover:text-foreground mr-4">
+                <button type="button" onClick={() => { setView('choice'); setJoinError(''); setInviteCode(''); }} className="text-muted-foreground hover:text-foreground mr-4 p-1 rounded-lg hover:bg-surface-container-highest transition-colors">
                   <ArrowLeft size={24} />
                 </button>
                 <h2 className="text-2xl font-heading font-bold">Join a group</h2>
@@ -246,13 +290,22 @@ export default function CreateJoinGroup() {
                   )}
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={isJoining || inviteCode.replace('-', '').length < 4}
-                  className="w-full bg-[#2DD4BF] hover:bg-[#14b8a6] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl transition shadow-lg shadow-[#2DD4BF]/20 mt-2"
-                >
-                  {isJoining ? 'Joining…' : 'Join Group'}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setView('choice'); setJoinError(''); setInviteCode(''); }}
+                    className="flex-1 bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/20 text-foreground font-bold py-4 rounded-xl transition"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isJoining || inviteCode.replace('-', '').length < 4}
+                    className="flex-1 bg-[#2DD4BF] hover:bg-[#14b8a6] disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl transition shadow-lg shadow-[#2DD4BF]/20"
+                  >
+                    {isJoining ? 'Joining…' : 'Join Group'}
+                  </button>
+                </div>
               </form>
             </div>
           )}
@@ -295,6 +348,7 @@ export default function CreateJoinGroup() {
 
               {/* Primary: Open Discussion */}
               <button
+                type="button"
                 onClick={handleGoToChat}
                 className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-primary/20 flex items-center justify-center gap-2 mb-3"
               >
@@ -304,6 +358,7 @@ export default function CreateJoinGroup() {
 
               {/* Secondary: Try Another Code */}
               <button
+                type="button"
                 onClick={() => { setView('join'); setJoinError(''); setInviteCode(''); }}
                 className="w-full bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/20 text-foreground font-semibold py-3.5 rounded-xl transition flex items-center justify-center gap-2"
               >
@@ -318,3 +373,4 @@ export default function CreateJoinGroup() {
     </div>
   );
 }
+

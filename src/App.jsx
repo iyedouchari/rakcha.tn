@@ -46,6 +46,7 @@ export default function App() {
   const syncRoute = useRakchaStore((s) => s.syncRoute);
   const initAuth = useRakchaStore((s) => s.initAuth);
   const currentUser = useRakchaStore((s) => s.currentUser);
+  const authInitialized = useRakchaStore((s) => s.authInitialized);
   const showToast = useRakchaStore((s) => s.showToast);
   const navigate = useRakchaStore((s) => s.navigate);
   const shouldReduceMotion = useReducedMotion();
@@ -64,8 +65,6 @@ export default function App() {
       setTimeout(() => {
         navigate('email-confirmed');
       }, 500);
-    } else if (!window.location.hash) {
-      window.location.hash = '#/landing';
     }
 
     const handleHashChange = () => {
@@ -81,7 +80,30 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [syncRoute, showToast, navigate, initAuth]);
 
+  // Keep authenticated users directly inside the app if they are on landing or login
+  useEffect(() => {
+    if (authInitialized) {
+      if (currentUser && (!currentPage || currentPage === 'landing' || currentPage === 'login' || currentPage === 'register')) {
+        navigate('app');
+      } else if (!currentUser && (!window.location.hash || window.location.hash === '#/' || window.location.hash === '#/landing')) {
+        if (currentPage !== 'landing') {
+          syncRoute('landing');
+        }
+      }
+    }
+  }, [authInitialized, currentUser, currentPage, navigate, syncRoute]);
+
   const getActiveComponent = () => {
+    if (!authInitialized && !['landing', 'login', 'register', 'check-email', 'email-confirmed'].includes(currentPage)) {
+      return (
+        <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="w-16 h-16 relative flex items-center justify-center animate-pulse">
+            <img src="/logo.png" alt="Rakcha" className="w-14 h-14 object-contain drop-shadow-[0_0_25px_rgba(99,102,241,0.7)]" />
+          </div>
+        </div>
+      );
+    }
+
     if (!currentUser && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'create-profile'].includes(currentPage)) {
       return <Login />;
     }
@@ -106,7 +128,7 @@ export default function App() {
       case 'settings':
         return <Settings />;
       default:
-        return <Landing />;
+        return currentUser ? <Dashboard /> : <Landing />;
     }
   };
 

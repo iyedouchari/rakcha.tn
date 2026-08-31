@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRakchaStore } from '../store/useRakchaStore';
 import { Settings, Plus, Video, VideoOff, Mic, MicOff, Image as ImageIcon, Smile, Phone, PhoneOff, MonitorUp, Send, MoreVertical, X, UserPlus, Users, Sparkles, LogOut, Bell, ArrowLeft, MoreHorizontal, Info, Play, Pause, Trash2, StopCircle, Copy, RefreshCw, Reply, SmilePlus, PhoneCall, Clock, Shield } from 'lucide-react';
 import { cn, normalizeUsername, DEFAULT_AVATAR } from '../lib/utils';
-import { AddFriendModal, InvitationsPanel, InviteCodeModal, ConfirmModal, UnfriendConfirmModal, BlockUserConfirmModal } from '../components/Modals';
+import { AddFriendModal, InvitationsPanel, InviteCodeModal, ConfirmModal, UnfriendConfirmModal, BlockUserConfirmModal, DisconnectModal } from '../components/Modals';
 import { IncomingCallModal } from '../components/IncomingCallModal';
 import { CallUI } from '../components/CallUI';
 import { GroupCallUI } from '../components/GroupCallUI';
 import EmojiPicker from 'emoji-picker-react';
 import DOMPurify from 'dompurify';
 import { VoicePlayer } from '../components/VoicePlayer';
+import MessageBubble from '../components/MessageBubble';
 import { playIncomingRingtone, stopIncomingRingtone } from '../lib/audio';
 import { useTypingIndicator } from '../hooks/useTypingIndicator';
 import { TypingIndicator } from '../components/TypingIndicator';
@@ -85,6 +86,8 @@ export default function Dashboard() {
   const [isAddFriendOpen, setIsAddFriendOpen] = useState(false);
   const [isInvitationsOpen, setIsInvitationsOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [unfriendTarget, setUnfriendTarget] = useState(null);
   const [blockTarget, setBlockTarget] = useState(null);
@@ -105,6 +108,19 @@ export default function Dashboard() {
       if (typeof unsubscribeCalls === 'function') unsubscribeCalls();
     };
   }, [activeGroupId]);
+
+  const handleConfirmDisconnect = async () => {
+    try {
+      setIsDisconnecting(true);
+      await useRakchaStore.getState().signOut();
+    } catch (err) {
+      console.error("Failed to disconnect:", err);
+      navigate('landing');
+    } finally {
+      setIsDisconnecting(false);
+      setIsDisconnectOpen(false);
+    }
+  };
 
   const filteredGroups = groups.filter(g =>
     g.name.toLowerCase().includes((searchQuery || '').toLowerCase())
@@ -130,7 +146,9 @@ export default function Dashboard() {
         "w-full md:w-[280px] flex flex-col bg-surface-container-low shrink-0 border-r border-outline-variant/10 z-10",
         activeGroupId ? "hidden md:flex" : "flex"
       )}>
+        {/* Sidebar Header: Reordered with Notifications tab / bell on the right */}
         <header className="h-16 flex items-center px-3 border-b border-outline-variant/10 shrink-0 gap-2">
+          {/* 1. Search Box */}
           <div className="hidden md:flex relative flex-1">
             <input
               value={searchQuery || ''}
@@ -139,17 +157,40 @@ export default function Dashboard() {
               className="w-full bg-surface-container-lowest border-none rounded-lg h-9 px-3 text-sm placeholder:text-muted-foreground focus:ring-1 focus:ring-primary focus:outline-none"
             />
           </div>
-          <button onClick={() => setIsAddFriendOpen(true)} className="w-9 h-9 bg-surface-container-highest rounded-xl flex items-center justify-center hover:bg-surface-bright transition shrink-0" title="Add Friend">
+          {/* 2. New Group Button */}
+          <button
+            type="button"
+            onClick={() => navigate('create-join')}
+            className="w-9 h-9 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-indigo-600 transition shrink-0 shadow-sm shadow-primary/20"
+            title="New Group / Join"
+            aria-label="Create or Join Group"
+          >
+            <Plus size={18} />
+          </button>
+          {/* 3. Add Friend Button */}
+          <button
+            type="button"
+            onClick={() => setIsAddFriendOpen(true)}
+            className="w-9 h-9 bg-surface-container-highest rounded-xl flex items-center justify-center hover:bg-surface-bright transition shrink-0 border border-outline-variant/10"
+            title="Add Friend"
+            aria-label="Add Friend"
+          >
             <UserPlus size={18} />
           </button>
-          <button onClick={() => setIsInvitationsOpen(true)} className="relative w-9 h-9 bg-surface-container-highest rounded-xl flex items-center justify-center hover:bg-surface-bright transition shrink-0" title="Invitations">
+          {/* 4. Notifications Bell Icon (Positioned to the Right) */}
+          <button
+            type="button"
+            onClick={() => setIsInvitationsOpen(true)}
+            className="relative w-9 h-9 bg-surface-container-highest rounded-xl flex items-center justify-center hover:bg-surface-bright transition shrink-0 border border-outline-variant/10"
+            title="Invitations & Notifications"
+            aria-label="Notifications"
+          >
             <Bell size={18} />
             {friendRequests.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{friendRequests.length}</span>
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-md ring-2 ring-surface-container-low pointer-events-none animate-in zoom-in duration-150">
+                {friendRequests.length > 99 ? '99+' : friendRequests.length}
+              </span>
             )}
-          </button>
-          <button onClick={() => navigate('create-join')} className="w-9 h-9 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-indigo-600 transition shrink-0" title="New Group">
-            <Plus size={18} />
           </button>
         </header>
 
@@ -250,7 +291,7 @@ export default function Dashboard() {
             <IconBtn onClick={() => navigate('settings')} title="Settings">
               <Settings size={16} />
             </IconBtn>
-            <IconBtn onClick={async () => { await useRakchaStore.getState().signOut(); navigate('landing'); }} title="Log Out">
+            <IconBtn onClick={() => setIsDisconnectOpen(true)} title="Log Out / Disconnect">
               <LogOut size={16} className="text-red-500" />
             </IconBtn>
           </div>
@@ -548,6 +589,12 @@ export default function Dashboard() {
         }}
         onCancel={() => setBlockTarget(null)}
       />
+      <DisconnectModal
+        isOpen={isDisconnectOpen}
+        isLoading={isDisconnecting}
+        onClose={() => setIsDisconnectOpen(false)}
+        onConfirm={handleConfirmDisconnect}
+      />
     </div>
   );
 }
@@ -756,46 +803,17 @@ function ChatStage({ messages, group, groupMembers, onSendMessage, currentUser, 
   };
 
   const scrollToMessage = (id) => {
+    if (!id) return;
     const el = document.getElementById(`anchor-${id}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
-  const QuotedReply = ({ reply, isMe }) => {
-    const senderName = reply.profiles?.display_name || reply.profiles?.username || 'Someone';
-    const preview = reply.media_type?.startsWith('audio')
-      ? '🎤 Voice message'
-      : reply.media_type?.startsWith('image')
-        ? '🖼️ Image'
-        : reply.content
-          ? reply.content.length > 60 ? reply.content.slice(0, 60) + '…' : reply.content
-          : '📎 Attachment';
-
-    return (
-      <button
-        onClick={() => scrollToMessage(reply.id)}
-        className={cn(
-          'w-full text-left rounded-md p-2 mb-1.5 border-l-4 transition-opacity hover:opacity-90',
-          'flex flex-col gap-0.5 cursor-pointer',
-          isMe
-            ? 'bg-black/25 border-white/60'
-            : 'bg-black/[0.07] border-indigo-500'
-        )}
-        style={{ outline: 'none' }}
-      >
-        <span className={cn(
-          'text-[11px] font-bold leading-tight truncate',
-          isMe ? 'text-white/90' : 'text-indigo-500'
-        )}>
-          {senderName}
-        </span>
-        <span className={cn(
-          'text-[11px] leading-tight truncate',
-          isMe ? 'text-white/70' : 'text-foreground/60'
-        )}>
-          {preview}
-        </span>
-      </button>
-    );
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('highlight-message-pulse');
+      void el.offsetWidth; // Restart CSS pulse animation
+      el.classList.add('highlight-message-pulse');
+      setTimeout(() => {
+        el.classList.remove('highlight-message-pulse');
+      }, 2000);
+    }
   };
 
   const replyPreviewLabel = (msg) => {
@@ -804,6 +822,7 @@ function ChatStage({ messages, group, groupMembers, onSendMessage, currentUser, 
     if (msg.media_type?.startsWith('image')) return '🖼️ Image';
     return msg.content || '📎 Attachment';
   };
+
 
   return (
     <div className={cn(
@@ -843,157 +862,49 @@ function ChatStage({ messages, group, groupMembers, onSendMessage, currentUser, 
           }
 
           // ── Normal message bubble ────────────────────────────────────────
-          const sender = m.profiles || {};
-          const isMe = m.sender_id === currentUser?.id;
-          const isSenderBlocked = !isMe && isUserBlocked(m.sender_id);
-          const displayAvatar = isMe ? currentUser?.avatar_url : isSenderBlocked ? DEFAULT_AVATAR : sender.avatar_url;
-          const displayName = isMe
-            ? (currentUser?.display_name || currentUser?.username || 'You')
-            : isSenderBlocked
-              ? 'Rakcha User'
-              : (sender.display_name || sender.username || 'User');
-          const isVoice = m.media_type?.startsWith('audio')
-            || m.media_url?.includes('/voice_')
-            || /\.(webm|mp4|ogg|m4a|aac|opus)(\?|$)/i.test(m.media_url || '');
-          const isImage = m.media_type?.startsWith('image');
+          const isSenderBlocked = m.sender_id !== currentUser?.id && isUserBlocked(m.sender_id);
 
           return (
-            <div
+            <MessageBubble
               key={m.id}
-              id={`anchor-${m.id}`}
-              className={cn(
-                'flex gap-2.5 group w-full relative chat-message-row',
-                isMe ? 'flex-row-reverse' : 'flex-row'
-              )}
-            >
-              {!isMe && (
-                <img
-                  src={displayAvatar || DEFAULT_AVATAR}
-                  className="w-8 h-8 rounded-full object-cover shrink-0 self-end chat-avatar"
-                  alt={displayName}
-                />
-              )}
-
-              <div className={cn(
-                'flex flex-col max-w-[72%] md:max-w-[60%] relative',
-                isMe ? 'items-end' : 'items-start'
-              )}>
-                <div className={cn(
-                  'flex items-baseline gap-1.5 mb-1 px-1',
-                  isMe ? 'flex-row-reverse' : 'flex-row'
-                )}>
-                  {!isMe && (
-                    <span className="text-[11px] font-semibold text-foreground/80">{displayName}</span>
-                  )}
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-
-                <div
-                  className={cn(
-                    'px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm break-words',
-                    isMe
-                      ? 'bg-primary text-white rounded-tr-sm'
-                      : 'bg-surface-container-highest text-foreground rounded-tl-sm'
-                  )}
-                  style={{
-                    overflowWrap: 'anywhere',
-                    wordBreak: 'break-word',
-                    ...(isVoice ? { width: 272, minWidth: 272, maxWidth: 272 } : {})
-                  }}
-                >
-                  {m.reply_to && (
-                    <QuotedReply reply={m.reply_to} isMe={isMe} />
-                  )}
-
-                  {isVoice && m.media_url && (
-                    <VoicePlayer
-                      audioUrl={m.media_url}
-                      waveform={m.waveform}
-                      duration={m.duration}
-                      isMe={isMe}
-                    />
-                  )}
-
-                  {isImage && m.media_url && (
-                    <img
-                      src={m.media_url}
-                      alt="Attachment"
-                      className="max-w-xs w-full h-auto rounded-xl cursor-pointer"
-                      onClick={() => window.open(m.media_url, '_blank')}
-                    />
-                  )}
-
-                  {m.media_url && !isVoice && !isImage && (
-                    <a
-                      href={m.media_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline font-bold text-xs"
-                    >
-                      📎 Download attachment
-                    </a>
-                  )}
-
-                  {m.content && (
-                    <div
-                      className={cn('max-w-full', (isVoice || isImage) && 'mt-1')}
-                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.content) }}
-                    />
-                  )}
-                </div>
-
-                {renderReactions(m.message_reactions, m.id)}
-
-                {isMe && (
-                  <button
-                    onClick={() => deleteMessage(m.id)}
-                    className="text-[10px] text-muted-foreground hover:text-red-500 transition mt-1.5 mr-0.5 opacity-0 group-hover:opacity-100"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-
-              <div className={cn(
-                'flex items-center gap-0.5 self-center opacity-0 group-hover:opacity-100 transition-opacity shrink-0',
-                isMe ? 'mr-1 order-first flex-row-reverse' : 'ml-1'
-              )}>
-                <button
-                  onClick={() => setReplyTo(m)}
-                  className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-surface-container transition"
-                  title="Reply"
-                >
-                  <Reply size={15} />
-                </button>
+              message={m}
+              currentUser={currentUser}
+              isBlocked={isSenderBlocked}
+              onReply={setReplyTo}
+              onDelete={deleteMessage}
+              onJumpToReply={scrollToMessage}
+              renderReactions={renderReactions}
+              renderReactionPicker={(msgId) => (
                 <div className="relative">
                   <button
-                    onClick={() => setActiveReactMsgId(activeReactMsgId === m.id ? null : m.id)}
+                    type="button"
+                    onClick={() => setActiveReactMsgId(activeReactMsgId === msgId ? null : msgId)}
                     className="p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-surface-container transition"
                     title="React"
                   >
                     <SmilePlus size={15} />
                   </button>
-                  {activeReactMsgId === m.id && (
+                  {activeReactMsgId === msgId && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setActiveReactMsgId(null)} />
-                      <div className={cn(
-                        'absolute bottom-full mb-1 z-50 shadow-2xl rounded-xl overflow-hidden border border-outline-variant/20',
-                        isMe ? 'right-0' : 'left-0'
-                      )}>
+                      <div
+                        className={cn(
+                          'absolute bottom-full mb-1 z-50 shadow-2xl rounded-xl overflow-hidden border border-outline-variant/20',
+                          m.sender_id === currentUser?.id ? 'right-0' : 'left-0'
+                        )}
+                      >
                         <EmojiPicker
                           theme="dark"
                           width={280}
                           height={300}
-                          onEmojiClick={d => handleEmojiReact(m.id, d.emoji)}
+                          onEmojiClick={(d) => handleEmojiReact(msgId, d.emoji)}
                         />
                       </div>
                     </>
                   )}
                 </div>
-              </div>
-            </div>
+              )}
+            />
           );
         })}
 
