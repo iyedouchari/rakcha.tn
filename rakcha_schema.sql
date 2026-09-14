@@ -334,10 +334,11 @@ CREATE POLICY "Users can update their own profile"
   USING (auth.uid() = id);
 
 -- ── Friend Requests ───────────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "Users see their own requests"  ON public.friend_requests;
-DROP POLICY IF EXISTS "Users can send requests"       ON public.friend_requests;
-DROP POLICY IF EXISTS "Receiver can update status"    ON public.friend_requests;
-DROP POLICY IF EXISTS "Receiver can delete request"   ON public.friend_requests;
+DROP POLICY IF EXISTS "Users see their own requests"          ON public.friend_requests;
+DROP POLICY IF EXISTS "Users can send requests"               ON public.friend_requests;
+DROP POLICY IF EXISTS "Receiver can update status"            ON public.friend_requests;
+DROP POLICY IF EXISTS "Receiver can delete request"           ON public.friend_requests;
+DROP POLICY IF EXISTS "Users can delete own friend requests"  ON public.friend_requests;
 
 CREATE POLICY "Users see their own requests"
   ON public.friend_requests FOR SELECT TO authenticated
@@ -351,7 +352,7 @@ CREATE POLICY "Receiver can update status"
   ON public.friend_requests FOR UPDATE TO authenticated
   USING (auth.uid() = receiver_id);
 
-CREATE POLICY "Receiver can delete request"
+CREATE POLICY "Users can delete own friend requests"
   ON public.friend_requests FOR DELETE TO authenticated
   USING (auth.uid() = receiver_id OR auth.uid() = sender_id);
 

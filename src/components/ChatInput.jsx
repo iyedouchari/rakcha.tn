@@ -153,11 +153,11 @@ export function ChatInput({
 
             <button
               type="button"
-              onClick={startRecording}
-              className="text-muted-foreground hover:text-red-500 transition p-1.5"
+              onClick={() => setIsRecording(true)}
+              className="text-muted-foreground hover:text-red-500 transition p-1"
               title="Record voice message"
             >
-              <Mic size={20} />
+              <Mic size={18} />
             </button>
 
             <button
@@ -166,7 +166,7 @@ export function ChatInput({
               className="bg-primary text-white p-1.5 rounded-lg disabled:opacity-40 transition"
               title="Send message"
             >
-              <Send size={17} />
+              <Send size={15} />
             </button>
           </div>
         </form>

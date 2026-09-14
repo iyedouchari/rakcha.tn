@@ -68,7 +68,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
     const queue = pendingCandidates.current[userId] || [];
     if (!pc || !pc.remoteDescription) return;
     for (const c of queue) {
-      try { await pc.addIceCandidate(c); } catch (e) { /* ignore */ }
+      try { await pc.addIceCandidate(c); } catch { /* ignore */ }
     }
     pendingCandidates.current[userId] = [];
   }, []);
@@ -78,44 +78,74 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
     if (peerConnectionsRef.current[remoteUserId]) {
       return peerConnectionsRef.current[remoteUserId];
     }
-    log('Creating PC for', remoteUserId.slice(0, 6));
+    log('Creating PC for peer', remoteUserId.slice(0, 6));
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
-    // 3. Attach DSP-conditioned clean audio track & HD video track
+    // 3. Attach DSP-conditioned clean audio track & HD video track with verified state
     const audioTrack = audioDspRef.current?.cleanAudioTrack || localStreamRef.current?.getAudioTracks()[0];
     const videoTrack = localStreamRef.current?.getVideoTracks()[0];
 
     if (audioTrack) {
+      audioTrack.enabled = !isMuted;
+      log('Attaching outbound audio track for', remoteUserId.slice(0, 6), 'enabled:', audioTrack.enabled);
       pc.addTrack(audioTrack, localStreamRef.current);
     }
     if (videoTrack) {
+      videoTrack.enabled = isCameraOn;
+      log('Attaching outbound video track for', remoteUserId.slice(0, 6), 'enabled:', videoTrack.enabled);
       pc.addTrack(videoTrack, localStreamRef.current);
     }
 
     // Prioritize VP9 / H.264 codecs
     tuneRTCPeerConnection(pc);
 
-    // ICE candidates
+    // ICE candidates handling & diagnostics
     pc.onicecandidate = (e) => {
       if (e.candidate) {
+        log(`Local ICE candidate for peer ${remoteUserId.slice(0, 6)}: [${e.candidate.protocol || 'unknown'} ${e.candidate.type || ''}]`);
         sendSignal(remoteUserId, { type: 'ice-candidate', candidate: e.candidate });
+      } else {
+        log(`ICE candidate gathering complete for peer ${remoteUserId.slice(0, 6)}`);
       }
+    };
+
+    pc.onicecandidateerror = (e) => {
+      console.warn(`[GroupCall ICE Error ${remoteUserId.slice(0, 6)}]`, e.errorCode, e.errorText);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      log(`ICE Connection state for peer ${remoteUserId.slice(0, 6)} ->`, pc.iceConnectionState);
+    };
+
+    pc.onicegatheringstatechange = () => {
+      log(`ICE Gathering state for peer ${remoteUserId.slice(0, 6)} ->`, pc.iceGatheringState);
+    };
+
+    pc.onsignalingstatechange = () => {
+      log(`Signaling state for peer ${remoteUserId.slice(0, 6)} ->`, pc.signalingState);
     };
 
     // Incoming tracks → update remote streams state
     pc.ontrack = (e) => {
-      log('Track received from', remoteUserId.slice(0, 6), e.track.kind);
+      log('Track received from peer', remoteUserId.slice(0, 6), 'kind:', e.track.kind, 'trackId:', e.track.id);
       if (!mountedRef.current) return;
+      
+      const stream = (e.streams && e.streams[0]) ? e.streams[0] : null;
       setRemoteStreams(prev => {
         const existing = prev[remoteUserId] || new MediaStream();
-        existing.addTrack(e.track);
+        if (stream) {
+          return { ...prev, [remoteUserId]: stream };
+        }
+        if (!existing.getTracks().some(t => t.id === e.track.id)) {
+          existing.addTrack(e.track);
+        }
         return { ...prev, [remoteUserId]: existing };
       });
       setLocalStatus('connected');
     };
 
     pc.onconnectionstatechange = () => {
-      log('PC state for', remoteUserId.slice(0, 6), '→', pc.connectionState);
+      log('PC connection state for', remoteUserId.slice(0, 6), '->', pc.connectionState);
       if (pc.connectionState === 'connected') {
         tuneVideoSender(pc);
       } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
@@ -130,12 +160,15 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
 
     peerConnectionsRef.current[remoteUserId] = pc;
     return pc;
-  }, [log, sendSignal]);
+  }, [log, sendSignal, isMuted, isCameraOn]);
 
   // ── Initiate offer to a newly-joined peer ───────────────────────────────────
   const makeOffer = useCallback(async (remoteUserId) => {
     const pc = createPeerConnection(remoteUserId);
     try {
+      if (audioDspRef.current) {
+        await audioDspRef.current.resume().catch(() => {});
+      }
       const rawOffer = await pc.createOffer();
       // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
       const enhancedSdp = boostSDPAudioQuality(rawOffer.sdp);
@@ -145,7 +178,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
       await tuneVideoSender(pc);
       
       sendSignal(remoteUserId, { type: 'offer', offer });
-      log('High-fidelity offer sent to', remoteUserId.slice(0, 6));
+      log('High-fidelity offer sent to peer', remoteUserId.slice(0, 6));
     } catch (e) {
       console.error('makeOffer error', e);
     }
@@ -165,8 +198,13 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         await makeOffer(from);
       }
       else if (type === 'offer') {
-        log('Offer from', from.slice(0, 6));
+        log('Offer received from peer', from.slice(0, 6));
         const pc = createPeerConnection(from);
+        
+        if (audioDspRef.current) {
+          await audioDspRef.current.resume().catch(() => {});
+        }
+        
         await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
         await drainCandidates(from);
         
@@ -179,10 +217,10 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         await tuneVideoSender(pc);
         
         sendSignal(from, { type: 'answer', answer });
-        log('High-fidelity answer sent to', from.slice(0, 6));
+        log('High-fidelity answer sent to peer', from.slice(0, 6));
       }
       else if (type === 'answer') {
-        log('Answer from', from.slice(0, 6));
+        log('Answer received from peer', from.slice(0, 6));
         const pc = peerConnectionsRef.current[from];
         if (pc) {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
@@ -194,7 +232,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         const pc = peerConnectionsRef.current[from];
         const candidate = new RTCIceCandidate(payload.candidate);
         if (pc && pc.remoteDescription) {
-          await pc.addIceCandidate(candidate);
+          await pc.addIceCandidate(candidate).catch(e => console.warn('[GroupCall] Add ICE candidate notice:', e));
         } else {
           if (!pendingCandidates.current[from]) pendingCandidates.current[from] = [];
           pendingCandidates.current[from].push(candidate);
@@ -251,7 +289,13 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         if (!mountedRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
         localStreamRef.current = stream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        
+        // Bind local stream with strict muted enforcement to prevent acoustic feedback loopback
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true;
+          localVideoRef.current.defaultMuted = true;
+        }
 
         // 2. 3-Stage Web Audio DSP Graph (85Hz Highpass -> 3kHz Peaking EQ -> Dynamics Compressor)
         try {
@@ -280,7 +324,6 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         channel.subscribe(async (status) => {
           if (status === 'SUBSCRIBED' && mountedRef.current) {
             log('Channel subscribed — announcing peer_joined');
-            // Broadcast to all existing participants that we joined
             channel.send({
               type: 'broadcast',
               event: 'signal',
@@ -306,6 +349,9 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
     if (audioDspRef.current?.cleanAudioTrack) {
       audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
     }
+    if (audioDspRef.current) {
+      audioDspRef.current.resume().catch(() => {});
+    }
   }, [isMuted]);
 
   // ── Camera toggle: enable/disable or dynamically add local video track ────
@@ -318,10 +364,13 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
           try {
             const newStream = await getOptimalUserMedia({ video: true, audio: false });
             const newVideoTrack = newStream.getVideoTracks()[0];
+            newVideoTrack.enabled = true;
             localStreamRef.current.addTrack(newVideoTrack);
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = null;
               localVideoRef.current.srcObject = localStreamRef.current;
+              localVideoRef.current.muted = true;
+              localVideoRef.current.defaultMuted = true;
             }
             Object.values(peerConnectionsRef.current).forEach(async (pc) => {
               pc.addTrack(newVideoTrack, localStreamRef.current);
@@ -353,6 +402,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       screenStreamRef.current = screenStream;
       const screenTrack = screenStream.getVideoTracks()[0];
+      screenTrack.enabled = true;
       screenTrack.onended = stopScreenShare;
 
       // Replace video sender in all peer connections
@@ -362,6 +412,8 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
       });
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = new MediaStream([screenTrack]);
+        localVideoRef.current.muted = true;
+        localVideoRef.current.defaultMuted = true;
       }
       toggleScreenShare();
     } catch (e) {
@@ -375,43 +427,65 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
     const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
     Object.values(peerConnectionsRef.current).forEach(pc => {
       const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender && cameraTrack) sender.replaceTrack(cameraTrack);
+      if (sender && cameraTrack) {
+        cameraTrack.enabled = true;
+        sender.replaceTrack(cameraTrack);
+      }
     });
-    if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current;
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.muted = true;
+      localVideoRef.current.defaultMuted = true;
+    }
     const { isScreenSharing } = useRakchaStore.getState();
     if (isScreenSharing) toggleScreenShare();
   };
 
   // ── Leave call ─────────────────────────────────────────────────────────────
   const handleLeave = async () => {
-    // Signal peers we are leaving
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
         event: 'signal',
         payload: { type: 'peer_left', from: currentUser.id },
       });
-      // Small delay so the signal goes out before cleanup
       await new Promise(r => setTimeout(r, 200));
     }
     cleanup();
     await leaveGroupCall(session.id);
   };
 
-  // ── Remote video tile refs (we need individual refs per peer) ────────────────
+  // ── Remote video & audio tile component ─────────────────────────────────────
   const RemoteVideoTile = ({ userId, stream }) => {
-    const ref = useRef(null);
+    const videoRef = useRef(null);
+    const audioRef = useRef(null);
     const participant = callParticipants.find(p => p.user_id === userId);
     const name = participant?.display_name || participant?.username || 'Participant';
     const avatar = participant?.avatar_url || DEFAULT_AVATAR;
 
     useEffect(() => {
-      if (ref.current && stream) ref.current.srcObject = stream;
-    }, [stream]);
+      if (videoRef.current && stream) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = false;
+        const vp = videoRef.current.play();
+        if (vp !== undefined) {
+          vp.catch(err => console.warn(`[RemoteVideoTile ${userId.slice(0, 6)}] Play warning:`, err));
+        }
+      }
+      if (audioRef.current && stream) {
+        audioRef.current.srcObject = stream;
+        audioRef.current.muted = false;
+        const ap = audioRef.current.play();
+        if (ap !== undefined) {
+          ap.catch(err => console.warn(`[RemoteAudioTile ${userId.slice(0, 6)}] Audio play warning:`, err));
+        }
+      }
+    }, [stream, userId]);
 
     return (
       <div className="relative bg-zinc-900 rounded-2xl overflow-hidden flex items-center justify-center aspect-video">
-        <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" />
+        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+        <audio ref={audioRef} autoPlay playsInline />
         {!stream && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <img src={avatar} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-white/10 animate-pulse" />
@@ -445,7 +519,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
         <div className="flex items-center gap-2.5">
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
           <span className="font-semibold text-sm">{group.name}</span>
-          <span className="text-xs text-white/40 ml-1">Group Call</span>
+          <span className="text-xs text-white/40 ml-1 capitalize">Group Call • {localStatus}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-white/50">
           <Users size={13} />
@@ -464,7 +538,7 @@ export function GroupCallUI({ group, currentUser, session, callParticipants }) {
           />
         ))}
 
-        {/* Local tile */}
+        {/* Local tile with guaranteed muted state */}
         <div className="relative bg-zinc-900 rounded-2xl overflow-hidden flex items-center justify-center aspect-video ring-2 ring-primary/60">
           <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           {!isCameraOn && (

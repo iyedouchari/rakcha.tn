@@ -94,9 +94,9 @@ export async function getOptimalUserMedia({
     } catch (err2) {
       console.warn('[Rakcha MediaEngine] 720p capture failed, falling back to standard userMedia...', err2);
       
-      // Attempt 3: Basic permissive fallback
+      // Attempt 3: Basic permissive fallback, guaranteeing echo cancellation and noise suppression
       return await navigator.mediaDevices.getUserMedia({
-        audio: audio ? true : false,
+        audio: audio ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } : false,
         video: video ? true : false
       });
     }
@@ -108,6 +108,9 @@ export async function getOptimalUserMedia({
 /**
  * Constructs a real-time Web Audio API DSP signal chain:
  * Raw Mic -> 85Hz Highpass (Rumble Cut) -> 3kHz Peaking EQ (Presence) -> Dynamics Compressor -> Output Destination
+ * 
+ * IMPORTANT: Microphone input is routed ONLY to MediaStreamDestinationNode for WebRTC transmission.
+ * It is NEVER connected to audioCtx.destination (hardware speakers) to prevent local acoustic feedback loopback.
  * 
  * @param {MediaStream} rawStream - MediaStream containing a raw audio track
  * @returns {{
@@ -141,7 +144,8 @@ export function createStudioAudioDSP(rawStream) {
   }
 
   const audioCtx = new AudioContextClass({ sampleRate: 48000 });
-  const sourceNode = audioCtx.createMediaStreamSource(new MediaStream([rawAudioTrack]));
+  const sourceStream = new MediaStream([rawAudioTrack]);
+  const sourceNode = audioCtx.createMediaStreamSource(sourceStream);
 
   // Stage 1: 85Hz Butterworth Highpass Filter (Cuts AC hum, desk bumps, mechanical keyboard rumble)
   const highpassFilter = audioCtx.createBiquadFilter();
@@ -174,6 +178,9 @@ export function createStudioAudioDSP(rawStream) {
   compressor.connect(destination);
 
   const cleanAudioTrack = destination.stream.getAudioTracks()[0];
+  if (cleanAudioTrack) {
+    cleanAudioTrack.enabled = rawAudioTrack.enabled;
+  }
 
   // Helper to resume audio context on user interaction (satisfies browser autoplay policies)
   const resume = async () => {

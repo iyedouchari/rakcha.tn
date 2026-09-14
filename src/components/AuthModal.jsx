@@ -26,9 +26,11 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
   const signIn = useRakchaStore((s) => s.signIn);
   const signUp = useRakchaStore((s) => s.signUp);
   const updateProfile = useRakchaStore((s) => s.updateProfile);
+  const resetPasswordForEmail = useRakchaStore((s) => s.resetPasswordForEmail);
 
-  const [mode, setMode] = useState(initialMode); // 'login' | 'register'
+  const [mode, setMode] = useState(initialMode); // 'login' | 'register' | 'forgot'
   const [registerStep, setRegisterStep] = useState(1); // Step 1: Email/Password, Step 2: Avatar/Profile
+  const [resetSent, setResetSent] = useState(false);
 
   // Step 1 Fields
   const [email, setEmail] = useState('');
@@ -53,7 +55,28 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
     if (newMode === mode) return;
     setMode(newMode);
     setRegisterStep(1);
+    setResetSent(false);
     setError('');
+  };
+
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!email || !email.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await resetPasswordForEmail(email.trim());
+      setResetSent(true);
+    } catch (err) {
+      setError(err.message || 'Failed to send reset link. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAvatarChange = (e) => {
@@ -250,6 +273,8 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
         >
           {mode === 'login'
             ? 'Sign in to Rakcha'
+            : mode === 'forgot'
+            ? 'Reset Password'
             : registerStep === 1
             ? 'Create your account'
             : 'Set up your profile'}
@@ -264,6 +289,8 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
         >
           {mode === 'login'
             ? 'Enter your credentials to access your squad'
+            : mode === 'forgot'
+            ? 'Enter your email to receive a password reset link'
             : registerStep === 1
             ? 'Enter your email and create a secure password'
             : 'Choose your avatar, display name, username, and bio'}
@@ -343,7 +370,11 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
                 </label>
                 <button
                   type="button"
-                  onClick={() => setError('Password reset instructions will be sent to registered emails.')}
+                  onClick={() => {
+                    setError('');
+                    setResetSent(false);
+                    setMode('forgot');
+                  }}
                   className="text-primary hover:text-indigo-400 text-xs font-medium transition-colors"
                 >
                   Forgot?
@@ -402,6 +433,90 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
               )}
             </motion.button>
           </form>
+        )}
+
+        {mode === 'forgot' && (
+          <div className="flex flex-col gap-4">
+            {resetSent ? (
+              <div className="text-center py-3">
+                <div className="w-14 h-14 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto mb-3.5 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.25)]">
+                  <Mail size={26} />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Check your email</h3>
+                <p className="text-xs text-muted-foreground mb-6 leading-relaxed">
+                  We sent a recovery link to <span className="text-white font-semibold">{email}</span>. Click the link in the email to set your new password.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleModeSwitch('login')}
+                  className="w-full bg-white/[0.06] hover:bg-white/[0.1] text-foreground font-bold py-3.5 rounded-xl transition border border-white/[0.08] text-sm flex items-center justify-center gap-2"
+                >
+                  <ArrowLeft size={16} /> Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPasswordSubmit} className="flex flex-col gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Mail size={13} className={focusedField === 'email' ? 'text-primary' : 'text-muted-foreground'} />
+                    Account Email
+                  </label>
+                  <div
+                    className={`rounded-xl border transition-all duration-300 ${
+                      focusedField === 'email'
+                        ? 'border-primary/80 ring-2 ring-primary/20 bg-[#161820]'
+                        : 'border-white/[0.08] bg-[#0E1015]/90 hover:border-white/[0.15]'
+                    }`}
+                  >
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setError('');
+                      }}
+                      onFocus={() => setFocusedField('email')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="you@example.com"
+                      className="w-full bg-transparent p-3.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none text-sm font-medium rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: loading ? 1 : 1.02 }}
+                  whileTap={{ scale: loading ? 1 : 0.98 }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-1 bg-gradient-to-r from-primary via-indigo-500 to-primary text-white font-bold py-4 rounded-xl shadow-[0_0_30px_rgba(99,102,241,0.4)] hover:shadow-[0_0_45px_rgba(99,102,241,0.6)] transition-all duration-300 flex items-center justify-center gap-2 group relative overflow-hidden disabled:opacity-60"
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-2.5">
+                      <Loader2 size={18} className="animate-spin text-white" />
+                      <span>Sending Link...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="relative z-10 text-sm tracking-wide font-bold">Send Reset Link</span>
+                      <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform relative z-10" />
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                    </>
+                  )}
+                </motion.button>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleModeSwitch('login')}
+                    className="text-xs text-muted-foreground hover:text-white transition-colors font-medium inline-flex items-center gap-1.5"
+                  >
+                    <ArrowLeft size={13} /> Back to Sign In
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
 
         {mode === 'register' && registerStep === 1 && (
@@ -693,6 +808,17 @@ export default function AuthModal({ initialMode = 'login', isModal = false, onCl
               className="text-primary hover:text-indigo-300 font-bold hover:underline transition-colors ml-1"
             >
               Sign Up free
+            </button>
+          </p>
+        ) : mode === 'forgot' ? (
+          <p>
+            Remember your password?{' '}
+            <button
+              type="button"
+              onClick={() => handleModeSwitch('login')}
+              className="text-primary hover:text-indigo-300 font-bold hover:underline transition-colors ml-1"
+            >
+              Sign In
             </button>
           </p>
         ) : (

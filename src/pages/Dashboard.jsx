@@ -143,11 +143,11 @@ export default function Dashboard() {
 
       {/* ── Left Sidebar ─────────────────────────────────────── */}
       <aside className={cn(
-        "w-full md:w-[280px] flex flex-col bg-surface-container-low shrink-0 border-r border-outline-variant/10 z-10",
+        "w-full md:w-[260px] flex flex-col bg-surface-container-low shrink-0 border-r border-outline-variant/10 z-10",
         activeGroupId ? "hidden md:flex" : "flex"
       )}>
         {/* Sidebar Header: Reordered with Notifications tab / bell on the right */}
-        <header className="h-16 flex items-center px-3 border-b border-outline-variant/10 shrink-0 gap-2">
+        <header className="h-14 flex items-center px-3 border-b border-outline-variant/10 shrink-0 gap-1.5">
           {/* 1. Search Box */}
           <div className="hidden md:flex relative flex-1">
             <input
@@ -273,16 +273,16 @@ export default function Dashboard() {
 
 
         {/* User Footer */}
-        <div className="mt-auto px-5 py-4 border-t border-outline-variant/10 flex items-center justify-between bg-surface-container-low shrink-0 z-10 relative">
+        <div className="mt-auto px-4 py-3 border-t border-outline-variant/10 flex items-center justify-between bg-surface-container-low shrink-0 z-10 relative">
           <img 
             src={currentUser?.avatar_url || DEFAULT_AVATAR}
             alt="My Profile" 
-            className="w-10 h-10 rounded-full object-cover shrink-0 cursor-pointer mr-3 md:mr-0"
+            className="w-9 h-9 rounded-full object-cover shrink-0 cursor-pointer mr-2.5 md:mr-0"
             onClick={() => navigate('settings')}
           />
-          <div className="hidden md:flex flex-col flex-1 min-w-0 cursor-pointer ml-3" onClick={() => navigate('settings')}>
-            <span className="text-sm font-semibold truncate">{currentUser?.display_name || currentUser?.username || 'User'}</span>
-            <span className="text-xs text-muted-foreground truncate">{currentUser?.username ? `@${normalizeUsername(currentUser.username)}` : ''}</span>
+          <div className="hidden md:flex flex-col flex-1 min-w-0 cursor-pointer ml-2.5" onClick={() => navigate('settings')}>
+            <span className="text-xs font-semibold truncate">{currentUser?.display_name || currentUser?.username || 'User'}</span>
+            <span className="text-[11px] text-muted-foreground truncate">{currentUser?.username ? `@${normalizeUsername(currentUser.username)}` : ''}</span>
           </div>
           <div className="hidden md:flex gap-1 shrink-0">
             <IconBtn onClick={toggleMute} title={isMuted ? 'Unmute' : 'Mute'}>

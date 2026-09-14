@@ -33,11 +33,16 @@ CREATE TABLE IF NOT EXISTS public.call_sessions (
   group_id    uuid        NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
   started_by  uuid        NOT NULL REFERENCES public.profiles(id) ON DELETE SET NULL,
   call_type   text        NOT NULL DEFAULT 'video' CHECK (call_type IN ('audio', 'video')),
+  status      text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
   started_at  timestamptz NOT NULL DEFAULT now(),
   ended_at    timestamptz,
   duration_s  integer,   -- filled on end
   created_at  timestamptz DEFAULT now()
 );
+
+-- Ensure status column exists if table was already created
+ALTER TABLE public.call_sessions
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'active';
 
 -- Only one active (non-ended) call per group
 CREATE UNIQUE INDEX IF NOT EXISTS idx_call_sessions_active_group
@@ -426,7 +431,7 @@ BEGIN
 
   -- Mark session as ended
   UPDATE public.call_sessions
-  SET ended_at = now(), duration_s = v_duration_s
+  SET ended_at = now(), duration_s = v_duration_s, status = 'completed'
   WHERE id = p_session_id;
 
   -- Clear all remaining participant rows for this session

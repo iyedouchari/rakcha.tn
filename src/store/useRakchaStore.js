@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { stopCallingSound, stopIncomingRingtone } from '../lib/audio';
+import { applyThemeToDOM, resetThemeToDefault } from '../context/ThemeContext';
 
 // Helper to safely set hash without triggering an infinite loop
 const setHash = (page) => {
@@ -12,7 +14,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'dark-slate', // 'dark-slate' | 'oled-black' | 'midnight-purple'
   accentColor: 'indigo', // 'indigo' | 'crimson' | 'emerald' | 'violet'
   chatDensity: 'cozy', // 'cozy' | 'compact'
-  fontSize: 15, // 13 - 18
+  fontSize: 13.5, // 12 - 16 (compact density)
   reducedMotion: false,
   // Hardware & WebRTC
   selectedAudioInputId: '',
@@ -31,14 +33,15 @@ export const DEFAULT_SETTINGS = {
   showVoiceReceipts: true,
 };
 
-export const getStoredSettings = () => {
+export const getStoredSettings = (userId) => {
   try {
     if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem('rakcha_settings');
+      const key = userId ? `rakcha_settings_${userId}` : 'rakcha_settings';
+      const raw = localStorage.getItem(key);
       if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
     }
   } catch (e) {}
-  return DEFAULT_SETTINGS;
+  return { ...DEFAULT_SETTINGS };
 };
 
 export const useRakchaStore = create((set, get) => ({
@@ -71,7 +74,11 @@ export const useRakchaStore = create((set, get) => ({
   isCameraOn: true,
   isScreenSharing: false,
 
-  incomingCall: null, // { callerId, callerName, callerAvatar, groupId, callType } — DM calls only
+  isCalling: false,
+  currentCall: null, // { id, groupId, targetUserId, callType, isCaller, status }
+  localStream: null,
+
+  incomingCall: null, // { callerId, callerName, callerAvatar, groupId, callType, id } — DM calls only
   activeCallType: 'video', // 'video' | 'audio'
   isCaller: false,
 
@@ -175,8 +182,18 @@ export const useRakchaStore = create((set, get) => ({
           profile.banner_color = profile.banner_color || savedBanner || 'linear-gradient(135deg, #6366F1 0%, #4338CA 100%)';
         }
         
-        set({ currentUser: profile, authInitialized: true });
-        get().applySettingsToDOM();
+        // Load user-scoped settings and overlay DB persisted appearance values
+        const userSettings = getStoredSettings(session.user.id);
+        if (profile?.accent_color) {
+          userSettings.accentColor = profile.accent_color;
+        }
+        if (profile?.theme) {
+          userSettings.theme = profile.theme;
+        }
+
+        set({ currentUser: profile, settings: userSettings, authInitialized: true });
+        applyThemeToDOM(userSettings.theme, userSettings.accentColor, userSettings.fontSize);
+
         get().fetchUserGroups();
         get().fetchFriendRequests();
         get().fetchFriends();
@@ -191,11 +208,15 @@ export const useRakchaStore = create((set, get) => ({
           get().navigate('app');
         }
       } else {
+        // Disconnected / Signed Out: Purge user state & reset DOM theme to default
+        resetThemeToDefault();
         const { globalSubscription, groupCallSubscription } = get();
         if (globalSubscription) supabase.removeChannel(globalSubscription);
         if (groupCallSubscription) supabase.removeChannel(groupCallSubscription);
         set({
           currentUser: null,
+          session: null,
+          settings: { ...DEFAULT_SETTINGS },
           authInitialized: true,
           groups: [],
           messages: [],
@@ -260,25 +281,65 @@ export const useRakchaStore = create((set, get) => ({
           set({ incomingCall: payload });
         }
       })
-      // Listen for caller cancelling before accept
+      // Listen for caller cancelling before accept (instant dismissal)
+      .on('broadcast', { event: 'call_cancelled' }, ({ payload }) => {
+        const incoming = get().incomingCall;
+        if (
+          payload &&
+          (payload.targetUserId === user.id ||
+            payload.groupId === incoming?.groupId ||
+            payload.callId === incoming?.callId ||
+            payload.callId === incoming?.id)
+        ) {
+          stopIncomingRingtone();
+          set({ incomingCall: null });
+          get().showToast('Call cancelled by caller', 'info');
+        }
+      })
+      // Listen for caller cancelling before accept (legacy event)
       .on('broadcast', { event: 'call_cancel' }, ({ payload }) => {
-        if (payload && payload.targetUserId === user.id) {
+        const incoming = get().incomingCall;
+        if (
+          payload &&
+          (payload.targetUserId === user.id ||
+            payload.groupId === incoming?.groupId ||
+            payload.callId === incoming?.callId ||
+            payload.callId === incoming?.id)
+        ) {
+          stopIncomingRingtone();
           set({ incomingCall: null });
         }
       })
       // Listen for receiver declining
       .on('broadcast', { event: 'call_decline' }, ({ payload }) => {
-        if (payload && payload.targetUserId === user.id) {
-          set({ activeCallGroupId: null });
+        if (payload && (payload.targetUserId === user.id || payload.groupId === get().activeCallGroupId)) {
+          stopCallingSound();
+          get().cancelOutgoingCall({ groupId: payload.groupId });
           get().showToast('Call declined', 'info');
         }
       })
+      // Listen for call session state changes (e.g. cancelled in DB)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'call_sessions' }, (payload) => {
+        const incoming = get().incomingCall;
+        if (incoming && (incoming.groupId === payload.new.group_id || incoming.session_id === payload.new.id || incoming.callId === payload.new.id)) {
+          if (payload.new.status === 'cancelled' || payload.new.ended_at) {
+            stopIncomingRingtone();
+            set({ incomingCall: null });
+            get().showToast('Call was cancelled', 'info');
+          }
+        }
+      })
       // Listen for new friend requests or updates
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `receiver_id=eq.${user.id}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `receiver_id=eq.${user.id}` }, (payload) => {
+        if (payload?.eventType === 'DELETE' && payload.old?.id) {
+          set((state) => ({
+            friendRequests: state.friendRequests.filter((r) => r.id !== payload.old.id),
+          }));
+        }
         get().fetchFriendRequests();
         get().fetchFriends();
       })
-      // Listen to accepted friend requests (when YOU sent it and they accept)
+      // Listen to accepted/deleted friend requests (when YOU sent it and they accept or reject/delete)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests', filter: `sender_id=eq.${user.id}` }, () => {
         get().fetchFriendRequests();
         get().fetchFriends();
@@ -397,6 +458,7 @@ export const useRakchaStore = create((set, get) => ({
 
   sendFriendRequest: async (targetId) => {
     const currentUser = get().currentUser;
+    if (!currentUser) throw new Error('You must be logged in to send friend requests.');
     if (targetId === currentUser.id) throw new Error('You cannot send a friend request to yourself.');
 
     const { data: existing } = await supabase
@@ -410,9 +472,11 @@ export const useRakchaStore = create((set, get) => ({
       if (existing.status === 'accepted') throw new Error('You are already friends with this user.');
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('friend_requests')
-      .insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' });
+      .insert({ sender_id: currentUser.id, receiver_id: targetId, status: 'pending' })
+      .select()
+      .single();
     
     if (error) {
       if (error.code === '23505') {
@@ -420,15 +484,28 @@ export const useRakchaStore = create((set, get) => ({
       }
       throw error;
     }
+
+    await get().fetchFriendRequests();
+    return data;
   },
 
   acceptFriendRequest: async (requestId) => {
     const { data: req, error: reqErr } = await supabase
       .from('friend_requests')
-      .select('sender_id, receiver_id')
+      .select('sender_id, receiver_id, status')
       .eq('id', requestId)
-      .single();
-    if (reqErr) throw reqErr;
+      .maybeSingle();
+
+    if (reqErr || !req) {
+      get().fetchFriendRequests();
+      throw new Error('This friend request is no longer available or was cancelled.');
+    }
+
+    if (req.status === 'accepted') {
+      get().fetchFriends();
+      get().fetchFriendRequests();
+      return;
+    }
 
     const { error } = await supabase
       .from('friend_requests')
@@ -571,24 +648,45 @@ export const useRakchaStore = create((set, get) => ({
 
   // ── Settings & Personalization Actions ───────────────────────────────────
   updateSettings: (partial) => {
+    const user = get().currentUser;
     const current = get().settings || DEFAULT_SETTINGS;
     const updated = { ...current, ...partial };
+    
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('rakcha_settings', JSON.stringify(updated));
+        const key = user?.id ? `rakcha_settings_${user.id}` : 'rakcha_settings';
+        localStorage.setItem(key, JSON.stringify(updated));
       }
     } catch (e) {}
+
     set({ settings: updated });
-    get().applySettingsToDOM();
+    applyThemeToDOM(updated.theme, updated.accentColor, updated.fontSize);
+
+    // Asynchronously persist appearance updates to Supabase profile
+    if (user?.id && (partial.accentColor !== undefined || partial.theme !== undefined)) {
+      const profileUpdates = {};
+      if (partial.accentColor !== undefined) {
+        profileUpdates.accent_color = partial.accentColor;
+      }
+      if (partial.theme !== undefined) {
+        profileUpdates.theme = partial.theme;
+      }
+
+      supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('[Rakcha Store] Appearance persistence notice:', error.message);
+          }
+        });
+    }
   },
 
   applySettingsToDOM: () => {
     const settings = get().settings || DEFAULT_SETTINGS;
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-theme', settings.theme || 'dark-slate');
-      document.documentElement.setAttribute('data-accent', settings.accentColor || 'indigo');
-      document.documentElement.style.setProperty('--font-size-chat', `${settings.fontSize || 15}px`);
-    }
+    applyThemeToDOM(settings.theme, settings.accentColor, settings.fontSize);
   },
 
   clearLocalMediaCache: () => {
@@ -698,24 +796,57 @@ export const useRakchaStore = create((set, get) => ({
   },
 
   declineFriendRequest: async (requestId) => {
-    const { error } = await supabase
-      .from('friend_requests')
-      .delete()
-      .eq('id', requestId);
-    if (error) throw error;
-    get().fetchFriendRequests();
-    get().fetchFriends();
+    try {
+      const { error } = await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('id', requestId);
+      if (error && error.code !== 'PGRST116') {
+        console.warn('[FriendRequest] decline error:', error);
+      }
+    } finally {
+      get().fetchFriendRequests();
+      get().fetchFriends();
+    }
   },
 
-  cancelFriendRequest: async (requestId) => {
-    const { error } = await supabase
-      .from('friend_requests')
-      .delete()
-      .eq('id', requestId);
-    if (error) throw error;
-    get().fetchFriendRequests();
-    get().fetchFriends();
-    get().showToast('Friend request cancelled.', 'info');
+  cancelFriendRequest: async (requestIdOrTargetUserId) => {
+    const currentUser = get().currentUser;
+    if (!currentUser || !requestIdOrTargetUserId) return;
+
+    const targetId = typeof requestIdOrTargetUserId === 'object' ? requestIdOrTargetUserId.targetUserId : requestIdOrTargetUserId;
+    const reqId = typeof requestIdOrTargetUserId === 'object' ? requestIdOrTargetUserId.requestId : requestIdOrTargetUserId;
+
+    // Optimistically update store
+    set((state) => ({
+      friendRequests: state.friendRequests.filter((r) => r.id !== reqId && r.sender_id !== targetId && r.receiver_id !== targetId),
+    }));
+
+    try {
+      let query = supabase.from('friend_requests').delete();
+
+      if (reqId && reqId !== targetId) {
+        query = query.or(`id.eq.${reqId},and(sender_id.eq.${currentUser.id},receiver_id.eq.${targetId})`);
+      } else {
+        query = query.or(`id.eq.${reqId},and(sender_id.eq.${currentUser.id},receiver_id.eq.${targetId}),and(receiver_id.eq.${currentUser.id},sender_id.eq.${targetId})`);
+      }
+
+      const { error } = await query;
+      if (error) {
+        console.error('[FriendRequest] cancelFriendRequest error:', error);
+        await get().fetchFriendRequests();
+        await get().fetchFriends();
+        throw error;
+      }
+
+      await get().fetchFriendRequests();
+      await get().fetchFriends();
+      get().showToast('Friend request cancelled.', 'info');
+    } catch (err) {
+      await get().fetchFriendRequests();
+      await get().fetchFriends();
+      throw err;
+    }
   },
 
   signUp: async ({ email, password, username, displayName }) => {
@@ -760,6 +891,16 @@ export const useRakchaStore = create((set, get) => ({
     return data;
   },
 
+  resetPasswordForEmail: async (email) => {
+    const redirectUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+    if (error) throw error;
+    get().showToast('Password reset link sent! Please check your inbox.', 'success');
+    return data;
+  },
+
   signIn: async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -786,9 +927,11 @@ export const useRakchaStore = create((set, get) => ({
     } catch (err) {
       console.warn("signOut encountered exception:", err);
     } finally {
+      resetThemeToDefault();
       set({
         currentUser: null,
         session: null,
+        settings: { ...DEFAULT_SETTINGS },
         groups: [],
         messages: [],
         friendRequests: [],
@@ -805,6 +948,9 @@ export const useRakchaStore = create((set, get) => ({
         activeCallGroupId: null,
         incomingCall: null,
         incomingGroupCall: null,
+        isCalling: false,
+        currentCall: null,
+        localStream: null,
         searchQuery: '',
       });
       setHash('landing');
@@ -1179,26 +1325,264 @@ export const useRakchaStore = create((set, get) => ({
 
     // DM call: existing P2P broadcast flow
     const user = currentUser;
+    const callId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `call_${Date.now()}`;
+    const callPayload = {
+      id: callId,
+      callId,
+      targetUserId,
+      callerId: user?.id,
+      callerName: user?.display_name || user?.username || 'User',
+      callerAvatar: user?.avatar_url,
+      groupId,
+      callType,
+      createdAt: new Date().toISOString(),
+    };
+
     const channel = get().globalSubscription;
     if (channel) {
       channel.send({
         type: 'broadcast',
         event: 'call_offer',
-        payload: {
-          targetUserId,
-          callerId: user.id,
-          callerName: user.display_name || user.username,
-          callerAvatar: user.avatar_url,
-          groupId,
-          callType
-        }
+        payload: callPayload,
       });
     }
 
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('activeCall', JSON.stringify({ groupId, callType, isCaller: true }));
+      sessionStorage.setItem('activeCall', JSON.stringify({ callId, groupId, callType, isCaller: true }));
     }
-    set({ activeCallGroupId: groupId, activeCallType: callType, isCaller: true, isCameraOn: callType === 'video' });
+
+    set({
+      isCalling: true,
+      currentCall: {
+        id: callId,
+        groupId,
+        targetUserId,
+        callType,
+        isCaller: true,
+        status: 'calling',
+      },
+      activeCallGroupId: groupId,
+      activeCallType: callType,
+      isCaller: true,
+      isCameraOn: callType === 'video',
+    });
+  },
+
+  cancelOutgoingCall: async (options = {}) => {
+    const state = get();
+    const activeGroupId = options.groupId || state.activeCallGroupId || state.currentCall?.groupId;
+    const targetUserId = options.targetUserId || state.currentCall?.targetUserId;
+    const callId = options.callId || state.currentCall?.id;
+    const stream = options.stream || state.localStream;
+
+    // 1. Stop all active media tracks (audio and video) immediately
+    try {
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {
+            /* ignore */
+          }
+        });
+      }
+      if (state.localStream && state.localStream !== stream) {
+        state.localStream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {
+            /* ignore */
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[Rakcha Store] Error stopping media tracks on cancel:', err);
+    }
+
+    // Stop ringback/calling sound immediately
+    try {
+      stopCallingSound();
+      stopIncomingRingtone();
+    } catch {
+      /* ignore */
+    }
+
+    // 2. Send real-time cancellation broadcast events over active call channel and global channel
+    const cancelPayload = {
+      type: 'call_cancelled',
+      callId,
+      groupId: activeGroupId,
+      targetUserId,
+      callerId: state.currentUser?.id,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      // Global broadcast to target user
+      if (state.globalSubscription) {
+        state.globalSubscription.send({
+          type: 'broadcast',
+          event: 'call_cancelled',
+          payload: cancelPayload,
+        }).catch(() => {});
+
+        // Also broadcast legacy call_cancel event for backward compatibility
+        state.globalSubscription.send({
+          type: 'broadcast',
+          event: 'call_cancel',
+          payload: { targetUserId, groupId: activeGroupId, callId },
+        }).catch(() => {});
+      }
+
+      // Broadcast over the call channel if activeGroupId exists
+      if (activeGroupId) {
+        const callChannel = (supabase.getChannels() || []).find(ch => 
+          ch.topic === `realtime:call-${activeGroupId}` || ch.topic === `call-${activeGroupId}`
+        );
+        if (callChannel) {
+          callChannel.send({
+            type: 'broadcast',
+            event: 'call_cancelled',
+            payload: cancelPayload,
+          }).catch(() => {});
+          
+          callChannel.send({
+            type: 'broadcast',
+            event: 'signal',
+            payload: { type: 'call_cancelled', from: state.currentUser?.id, callId },
+          }).catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('[Rakcha Store] Broadcast cancel notification notice:', err);
+    }
+
+    // 3. Update call row in Supabase database setting status: 'cancelled' and ended_at
+    if (activeGroupId || callId) {
+      try {
+        const nowISO = new Date().toISOString();
+        
+        // Attempt update on call_sessions
+        if (callId) {
+          const { error: sessionErr } = await supabase
+            .from('call_sessions')
+            .update({ status: 'cancelled', ended_at: nowISO })
+            .eq('id', callId);
+
+          if (sessionErr && (sessionErr.code === '42703' || sessionErr.message?.includes('status'))) {
+            await supabase
+              .from('call_sessions')
+              .update({ ended_at: nowISO })
+              .eq('id', callId);
+          }
+        } else if (activeGroupId) {
+          const { error: sessionErr } = await supabase
+            .from('call_sessions')
+            .update({ status: 'cancelled', ended_at: nowISO })
+            .eq('group_id', activeGroupId)
+            .is('ended_at', null);
+
+          if (sessionErr && (sessionErr.code === '42703' || sessionErr.message?.includes('status'))) {
+            await supabase
+              .from('call_sessions')
+              .update({ ended_at: nowISO })
+              .eq('group_id', activeGroupId)
+              .is('ended_at', null);
+          }
+        }
+
+        // Also attempt update on 'calls' table if present in DB schema
+        try {
+          if (callId) {
+            await supabase
+              .from('calls')
+              .update({ status: 'cancelled', ended_at: nowISO })
+              .eq('id', callId);
+          } else if (activeGroupId) {
+            await supabase
+              .from('calls')
+              .update({ status: 'cancelled', ended_at: nowISO })
+              .eq('group_id', activeGroupId)
+              .is('ended_at', null);
+          }
+        } catch {
+          /* ignore */
+        }
+      } catch (err) {
+        console.warn('[Rakcha Store] DB cancel call update notice:', err);
+      }
+    }
+
+    // 4. Unsubscribe and clean up the Supabase Realtime channel
+    try {
+      if (activeGroupId) {
+        const activeChannels = supabase.getChannels() || [];
+        for (const ch of activeChannels) {
+          if (ch.topic === `realtime:call-${activeGroupId}` || ch.topic === `call-${activeGroupId}`) {
+            supabase.removeChannel(ch);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Rakcha Store] Clean up call channel notice:', e);
+    }
+
+    // 5. Reset local UI call states
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('activeCall');
+    }
+
+    set({
+      isCalling: false,
+      currentCall: null,
+      localStream: null,
+      activeCallGroupId: null,
+      isCaller: false,
+      activeCallSession: null,
+      incomingCall: null,
+    });
+  },
+
+  cancelCall: (targetUserId, groupId) => {
+    return get().cancelOutgoingCall({ targetUserId, groupId });
+  },
+
+  endCall: () => {
+    const state = get();
+    if (state.localStream) {
+      try {
+        state.localStream.getTracks().forEach((track) => {
+          try {
+            track.stop();
+            track.enabled = false;
+          } catch {
+            /* ignore */
+          }
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      stopCallingSound();
+      stopIncomingRingtone();
+    } catch {
+      /* ignore */
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('activeCall');
+    }
+    set({
+      isCalling: false,
+      currentCall: null,
+      localStream: null,
+      activeCallGroupId: null,
+      incomingCall: null,
+      isCaller: false,
+      activeCallSession: null,
+    });
   },
 
   // ── Group Call Actions ───────────────────────────────────────────────────
@@ -1370,25 +1754,6 @@ export const useRakchaStore = create((set, get) => ({
       }
       set({ incomingCall: null });
     }
-  },
-
-  cancelCall: (targetUserId, groupId) => {
-    const channel = get().globalSubscription;
-    if (channel) {
-      channel.send({
-        type: 'broadcast',
-        event: 'call_cancel',
-        payload: { targetUserId, groupId }
-      });
-    }
-    set({ activeCallGroupId: null, isCaller: false });
-  },
-
-  endCall: () => {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.removeItem('activeCall');
-    }
-    set({ activeCallGroupId: null, incomingCall: null, isCaller: false, activeCallSession: null });
   },
 
   deleteMessage: async (messageId) => {

@@ -14,11 +14,12 @@ import {
 } from '../utils/webrtcMediaEngine';
 
 export function CallUI({ group, currentUser, onLeave }) {
-  const { isMuted, isCameraOn, toggleMute, toggleCamera, isCaller, activeCallType, endCall } = useRakchaStore();
+  const { isMuted, isCameraOn, toggleMute, toggleCamera, isCaller, activeCallType, endCall, cancelOutgoingCall } = useRakchaStore();
   const [callStatus, setCallStatus] = useState(isCaller ? 'Calling...' : 'Connecting...');
   
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
   
   const localStreamRef = useRef(null);
   const audioDspRef = useRef(null);
@@ -60,13 +61,20 @@ export function CallUI({ group, currentUser, onLeave }) {
         });
         
         if (!mounted) {
-          stream.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach(t => {
+            try { t.stop(); t.enabled = false; } catch { /* ignore */ }
+          });
           return;
         }
 
         localStreamRef.current = stream;
+        useRakchaStore.setState({ localStream: stream, isCalling: true });
+
+        // Bind local stream with strict muted enforcement to prevent acoustic feedback loopback
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true;
+          localVideoRef.current.defaultMuted = true;
         }
 
         // 2. 3-Stage Web Audio DSP Graph (85Hz Highpass -> 3kHz Peaking EQ -> Dynamics Compressor)
@@ -79,18 +87,14 @@ export function CallUI({ group, currentUser, onLeave }) {
           console.warn('[Rakcha CallUI] DSP Graph init fallback:', dspErr);
         }
 
-        // Apply initial mute state
-        stream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+        // Apply initial mute state to both raw and clean audio tracks
+        stream.getAudioTracks().forEach(t => {
+          t.enabled = !isMuted;
+        });
         if (audioDspRef.current?.cleanAudioTrack) {
           audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
         }
         
-        // Initialize remote stream placeholder
-        remoteStreamRef.current = new MediaStream();
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStreamRef.current;
-        }
-
         // Setup Signaling Channel with broadcast enabled
         const channel = supabase.channel(`call-${group.id}`, {
           config: { broadcast: { ack: false, self: false } }
@@ -108,6 +112,11 @@ export function CallUI({ group, currentUser, onLeave }) {
                 await createPeerConnection();
               }
               const pc = peerConnectionRef.current;
+              
+              if (audioDspRef.current) {
+                await audioDspRef.current.resume().catch(() => {});
+              }
+              
               const rawOffer = await pc.createOffer();
               
               // 4. Programmatic SDP Optimizer: Injects 64kbps CBR Opus + In-Band FEC
@@ -139,8 +148,12 @@ export function CallUI({ group, currentUser, onLeave }) {
               }
               const pc = peerConnectionRef.current;
               
+              if (audioDspRef.current) {
+                await audioDspRef.current.resume().catch(() => {});
+              }
+              
               await pc.setRemoteDescription(new RTCSessionDescription(payload.offer));
-              processIceQueue(pc);
+              await processIceQueue(pc);
               
               const rawAnswer = await pc.createAnswer();
               
@@ -163,7 +176,7 @@ export function CallUI({ group, currentUser, onLeave }) {
               const pc = peerConnectionRef.current;
               if (pc) {
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.answer));
-                processIceQueue(pc);
+                await processIceQueue(pc);
                 setCallStatus('');
                 await tuneVideoSender(pc);
               }
@@ -172,22 +185,60 @@ export function CallUI({ group, currentUser, onLeave }) {
               const pc = peerConnectionRef.current;
               const candidate = new RTCIceCandidate(payload.candidate);
               if (pc && pc.remoteDescription) {
-                log('Adding ICE candidate directly.');
-                await pc.addIceCandidate(candidate);
+                log(`Adding ICE candidate directly: [${candidate.protocol || ''} ${candidate.type || ''}]`);
+                await pc.addIceCandidate(candidate).catch(e => console.warn('[CallUI] Add ICE candidate notice:', e));
               } else {
-                log('Queueing ICE candidate.');
+                log('Queueing ICE candidate (remoteDescription not set yet).');
                 iceCandidateQueueRef.current.push(candidate);
               }
             }
-            else if (payload.type === 'call_ended') {
-              log('Remote user ended the call.');
-              setCallStatus('Call ended');
-              setTimeout(() => handleEndCall(false), 1500); // end after brief delay
+            else if (payload.type === 'call_cancelled' || payload.type === 'call_ended') {
+              log(`Remote user ${payload.type === 'call_cancelled' ? 'cancelled' : 'ended'} the call.`);
+              setCallStatus(payload.type === 'call_cancelled' ? 'Call cancelled' : 'Call ended');
+              stopCallingSound();
+              if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach((t) => {
+                  try { t.stop(); t.enabled = false; } catch { /* ignore */ }
+                });
+              }
+              if (audioDspRef.current) {
+                try { audioDspRef.current.cleanup(); } catch { /* ignore */ }
+              }
+              setTimeout(() => handleEndCall(false), 500);
             }
           } catch (e) {
-            console.error('Signaling error', e);
+            console.error('[CallUI] Signaling error', e);
           }
         });
+
+        // Listen for direct broadcast cancellation event
+        channel.on('broadcast', { event: 'call_cancelled' }, async () => {
+          log('Received direct call_cancelled broadcast');
+          setCallStatus('Call cancelled');
+          stopCallingSound();
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach((t) => {
+              try { t.stop(); t.enabled = false; } catch { /* ignore */ }
+            });
+          }
+          if (audioDspRef.current) {
+            try { audioDspRef.current.cleanup(); } catch { /* ignore */ }
+          }
+          setTimeout(() => handleEndCall(false), 500);
+        });
+
+        // Listen for postgres_changes on call_sessions
+        channel.on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'call_sessions', filter: `group_id=eq.${group.id}` },
+          (payload) => {
+            if (payload.new.status === 'cancelled' || payload.new.ended_at) {
+              log('Call session marked ended/cancelled in database');
+              setCallStatus('Call ended');
+              setTimeout(() => handleEndCall(false), 500);
+            }
+          }
+        );
 
         log('Subscribing to channel...');
         channel.subscribe(async (status) => {
@@ -224,50 +275,112 @@ export function CallUI({ group, currentUser, onLeave }) {
     };
 
     const createPeerConnection = async () => {
-      log('Initializing RTCPeerConnection with STUN configuration');
+      log('Initializing RTCPeerConnection with STUN/TURN configuration');
       const pc = new RTCPeerConnection(RTC_CONFIG);
 
-      // 3. Attach DSP-conditioned clean audio track & video track
+      // 3. Attach Outbound Tracks & Verify State
       const audioTrack = audioDspRef.current?.cleanAudioTrack || localStreamRef.current?.getAudioTracks()[0];
       const videoTrack = localStreamRef.current?.getVideoTracks()[0];
 
       if (audioTrack) {
-        log('Adding 3-Stage DSP clean audio track to PC');
+        audioTrack.enabled = !isMuted;
+        log('Attaching Outbound Clean Audio Track to PC:', audioTrack.id, 'enabled:', audioTrack.enabled);
         pc.addTrack(audioTrack, localStreamRef.current);
       }
       if (videoTrack) {
-        log('Adding HD video track to PC');
+        videoTrack.enabled = isCameraOn;
+        log('Attaching Outbound HD Video Track to PC:', videoTrack.id, 'enabled:', videoTrack.enabled);
         pc.addTrack(videoTrack, localStreamRef.current);
       }
 
-      // 3. Tune RTCPeerConnection codec preferences (prioritize VP9 / H.264)
+      // Prioritize VP9 / H.264 video codecs
       tuneRTCPeerConnection(pc);
 
+      // ICE Candidates handling & diagnostic tracing
       pc.onicecandidate = (event) => {
         if (event.candidate && channelRef.current) {
-          log('Sending local ICE candidate');
+          log(`Local ICE candidate gathered: [${event.candidate.protocol || 'unknown'} ${event.candidate.type || ''}]`, event.candidate.candidate);
           channelRef.current.send({
             type: 'broadcast',
             event: 'signal',
             payload: { type: 'ice-candidate', candidate: event.candidate, from: currentUser.id }
           });
+        } else if (!event.candidate) {
+          log('Local ICE candidate gathering completed (end-of-candidates).');
         }
       };
 
+      pc.onicecandidateerror = (event) => {
+        console.warn(`[CallUI ICE Error] Code: ${event.errorCode}, Text: ${event.errorText}, URL: ${event.url}`);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        log('ICE Connection State ->', pc.iceConnectionState);
+      };
+
+      pc.onicegatheringstatechange = () => {
+        log('ICE Gathering State ->', pc.iceGatheringState);
+      };
+
+      pc.onsignalingstatechange = () => {
+        log('Signaling State ->', pc.signalingState);
+      };
+
+      // Remote Track Attachment & Autoplay Handling
       pc.ontrack = (event) => {
-        log('Received remote track', event.track.kind);
-        if (remoteStreamRef.current) {
-          remoteStreamRef.current.addTrack(event.track);
-          setCallStatus(''); // Clear calling status once we have media
+        log('pc.ontrack received remote track:', event.track.kind, 'ID:', event.track.id, 'Streams:', event.streams?.length);
+        
+        const remoteStream = (event.streams && event.streams[0])
+          ? event.streams[0]
+          : (remoteStreamRef.current || new MediaStream());
+
+        if (!event.streams || !event.streams[0]) {
+          if (!remoteStream.getTracks().some(t => t.id === event.track.id)) {
+            remoteStream.addTrack(event.track);
+          }
         }
+        remoteStreamRef.current = remoteStream;
+
+        // 1. Video Element Binding (Unmuted, auto-play handled)
+        if (remoteVideoRef.current) {
+          if (remoteVideoRef.current.srcObject !== remoteStream) {
+            remoteVideoRef.current.srcObject = remoteStream;
+          }
+          remoteVideoRef.current.muted = false;
+          const vPromise = remoteVideoRef.current.play();
+          if (vPromise !== undefined) {
+            vPromise.catch((err) => {
+              console.warn('[CallUI] Remote video autoplay prevented/interrupted:', err);
+            });
+          }
+        }
+
+        // 2. Dedicated Audio Element Binding (Guarantees uninterrupted audio playback)
+        if (remoteAudioRef.current) {
+          if (remoteAudioRef.current.srcObject !== remoteStream) {
+            remoteAudioRef.current.srcObject = remoteStream;
+          }
+          remoteAudioRef.current.muted = false;
+          const aPromise = remoteAudioRef.current.play();
+          if (aPromise !== undefined) {
+            aPromise.catch((err) => {
+              console.warn('[CallUI] Remote audio element playback blocked:', err);
+            });
+          }
+        }
+
+        setCallStatus(''); // Clear calling status once we have active incoming media
       };
 
       pc.onconnectionstatechange = () => {
-        log('Connection state changed:', pc.connectionState);
+        log('PeerConnection State ->', pc.connectionState);
         if (pc.connectionState === 'connected') {
           setCallStatus('');
           tuneVideoSender(pc);
-        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        } else if (pc.connectionState === 'disconnected') {
+          log('PeerConnection disconnected, waiting for reconnection...');
+        } else if (pc.connectionState === 'failed') {
+          log('PeerConnection failed.');
           setCallStatus('Disconnected');
         }
       };
@@ -280,18 +393,49 @@ export function CallUI({ group, currentUser, onLeave }) {
     return () => {
       mounted = false;
       log('Cleaning up CallUI and DSP audio context...');
+      stopCallingSound();
       if (audioDspRef.current) {
-        audioDspRef.current.cleanup();
+        try {
+          audioDspRef.current.cleanup();
+        } catch {
+          /* ignore */
+        }
       }
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(t => t.stop());
+        localStreamRef.current.getTracks().forEach((t) => {
+          try {
+            t.stop();
+            t.enabled = false;
+          } catch {
+            /* ignore */
+          }
+        });
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => {
+          try {
+            t.stop();
+            t.enabled = false;
+          } catch {
+            /* ignore */
+          }
+        });
       }
       if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
+        try {
+          peerConnectionRef.current.close();
+        } catch {
+          /* ignore */
+        }
       }
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        try {
+          supabase.removeChannel(channelRef.current);
+        } catch {
+          /* ignore */
+        }
       }
+      useRakchaStore.setState({ isCalling: false, localStream: null });
     };
   }, []); // Run once on mount
 
@@ -300,11 +444,15 @@ export function CallUI({ group, currentUser, onLeave }) {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach(t => {
         t.enabled = !isMuted;
-        log('Audio track enabled:', !isMuted);
+        log('Local stream audio track enabled:', !isMuted);
       });
     }
     if (audioDspRef.current?.cleanAudioTrack) {
       audioDspRef.current.cleanAudioTrack.enabled = !isMuted;
+      log('DSP clean audio track enabled:', !isMuted);
+    }
+    if (audioDspRef.current) {
+      audioDspRef.current.resume().catch(() => {});
     }
   }, [isMuted]);
 
@@ -322,14 +470,17 @@ export function CallUI({ group, currentUser, onLeave }) {
           try {
             const newStream = await getOptimalUserMedia({ video: true, audio: false });
             const newVideoTrack = newStream.getVideoTracks()[0];
+            newVideoTrack.enabled = true;
             
             // Add track to local stream
             localStreamRef.current.addTrack(newVideoTrack);
             
-            // Re-assign srcObject so local video updates
+            // Re-assign srcObject so local video updates with muted=true enforced
             if (localVideoRef.current) {
               localVideoRef.current.srcObject = null;
               localVideoRef.current.srcObject = localStreamRef.current;
+              localVideoRef.current.muted = true;
+              localVideoRef.current.defaultMuted = true;
             }
 
             // Add track to PeerConnection
@@ -382,6 +533,7 @@ export function CallUI({ group, currentUser, onLeave }) {
         screenStreamRef.current = stream;
         
         const screenTrack = stream.getVideoTracks()[0];
+        screenTrack.enabled = true;
         
         // Listen to the browser's "Stop sharing" button
         screenTrack.onended = () => {
@@ -408,9 +560,11 @@ export function CallUI({ group, currentUser, onLeave }) {
           });
         }
         
-        // Update local video element
+        // Update local video element with strict muted enforcement
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = new MediaStream([screenTrack]);
+          localVideoRef.current.muted = true;
+          localVideoRef.current.defaultMuted = true;
         }
         toggleScreenShare(); // sets to true
         log('Screen sharing started');
@@ -438,6 +592,7 @@ export function CallUI({ group, currentUser, onLeave }) {
 
     if (sender) {
       if (isCameraOn && cameraTrack) {
+        cameraTrack.enabled = true;
         sender.replaceTrack(cameraTrack);
       } else {
         sender.replaceTrack(null);
@@ -446,34 +601,91 @@ export function CallUI({ group, currentUser, onLeave }) {
 
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.muted = true;
+      localVideoRef.current.defaultMuted = true;
     }
     log('Screen sharing stopped');
   };
 
-  const handleEndCall = (broadcast = true) => {
-    log('Ending call. Broadcast:', broadcast);
-    if (broadcast && channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'signal',
-        payload: { type: 'call_ended', from: currentUser.id }
-      }).then(() => {
-        // give it a tiny moment to send
-        endCall();
-        onLeave();
-      }).catch(() => {
-        endCall();
-        onLeave();
+  const handleEndCall = async (broadcast = true) => {
+    log('Ending/cancelling call. Broadcast:', broadcast);
+    const isInvitationPending = isCaller && callStatus === 'Calling...';
+
+    // 1. Stop all active media tracks immediately to shut down mic/cam hardware instantly
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+          t.enabled = false;
+        } catch {
+          /* ignore */
+        }
       });
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+          t.enabled = false;
+        } catch {
+          /* ignore */
+        }
+      });
+    }
+    if (audioDspRef.current) {
+      try {
+        audioDspRef.current.cleanup();
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Stop ringback sound
+    stopCallingSound();
+
+    if (broadcast && channelRef.current) {
+      try {
+        const signalType = isInvitationPending ? 'call_cancelled' : 'call_ended';
+        await channelRef.current.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: { type: signalType, from: currentUser.id }
+        }).catch(() => {});
+
+        if (isInvitationPending) {
+          await channelRef.current.send({
+            type: 'broadcast',
+            event: 'call_cancelled',
+            payload: { type: 'call_cancelled', groupId: group.id, from: currentUser.id }
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.warn('[CallUI] Broadcast end signal notice:', e);
+      }
+    }
+
+    if (isInvitationPending) {
+      try {
+        await cancelOutgoingCall({
+          groupId: group.id,
+          targetUserId: group.otherUserId,
+          stream: localStreamRef.current
+        });
+      } catch {
+        endCall();
+      }
     } else {
       endCall();
-      onLeave();
     }
-  };
 
+    onLeave();
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-[#0B0E14] relative">
+      {/* Hidden dedicated remote audio element to ensure audio is always played regardless of video rendering */}
+      <audio ref={remoteAudioRef} autoPlay playsInline />
+
       <div className="flex-1 relative overflow-hidden">
         {/* Remote Video (Full Screen) */}
         <div className="absolute inset-0 bg-surface-container-lowest flex items-center justify-center">
@@ -493,7 +705,7 @@ export function CallUI({ group, currentUser, onLeave }) {
           )}
         </div>
         
-        {/* Local Video (PiP) */}
+        {/* Local Video (PiP) with guaranteed muted state */}
         <div className="absolute top-6 right-6 w-48 aspect-[3/4] bg-surface-container-high rounded-2xl overflow-hidden shadow-2xl border-2 border-outline-variant/20 z-20">
           <video 
             ref={localVideoRef} 

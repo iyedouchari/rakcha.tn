@@ -10,7 +10,9 @@ import CreateJoinGroup from './pages/CreateJoinGroup';
 import Settings from './pages/Settings';
 import CheckEmail from './pages/CheckEmail';
 import EmailConfirmed from './pages/EmailConfirmed';
+import UpdatePassword from './pages/UpdatePassword';
 import Toast from './components/Toast';
+import { ThemeProvider } from './context/ThemeContext';
 
 const pageTransitionVariants = {
   initial: (shouldReduce) => ({
@@ -59,8 +61,12 @@ export default function App() {
 
     initAuth();
 
-    // Check if returning from email confirmation
-    if (window.location.hash.includes('type=signup') || window.location.hash.includes('access_token')) {
+    // Check if returning from recovery or email confirmation
+    if (window.location.hash.includes('type=recovery') || window.location.hash.includes('update-password')) {
+      setTimeout(() => {
+        navigate('update-password');
+      }, 100);
+    } else if (window.location.hash.includes('type=signup') || window.location.hash.includes('access_token')) {
       // Let Supabase handle the token, then redirect to our success page
       setTimeout(() => {
         navigate('email-confirmed');
@@ -69,6 +75,10 @@ export default function App() {
 
     const handleHashChange = () => {
       let page = window.location.hash.replace('#/', '') || 'landing';
+      if (page.includes('type=recovery') || page.includes('update-password')) {
+        syncRoute('update-password');
+        return;
+      }
       if (page.includes('access_token') || page.includes('type=signup')) {
         // Ignore hash changes caused by auth tokens directly
         return;
@@ -94,7 +104,7 @@ export default function App() {
   }, [authInitialized, currentUser, currentPage, navigate, syncRoute]);
 
   const getActiveComponent = () => {
-    if (!authInitialized && !['landing', 'login', 'register', 'check-email', 'email-confirmed'].includes(currentPage)) {
+    if (!authInitialized && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'update-password'].includes(currentPage)) {
       return (
         <div className="min-h-screen bg-[#0B0E14] flex flex-col items-center justify-center relative overflow-hidden">
           <div className="w-16 h-16 relative flex items-center justify-center animate-pulse">
@@ -104,7 +114,7 @@ export default function App() {
       );
     }
 
-    if (!currentUser && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'create-profile'].includes(currentPage)) {
+    if (!currentUser && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'create-profile', 'update-password'].includes(currentPage)) {
       return <Login />;
     }
 
@@ -119,6 +129,8 @@ export default function App() {
         return <CheckEmail />;
       case 'email-confirmed':
         return <EmailConfirmed />;
+      case 'update-password':
+        return <UpdatePassword />;
       case 'create-profile':
         return <CreateProfile />;
       case 'app':
@@ -132,26 +144,28 @@ export default function App() {
     }
   };
 
-  const activeKey = !currentUser && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'create-profile'].includes(currentPage)
+  const activeKey = !currentUser && !['landing', 'login', 'register', 'check-email', 'email-confirmed', 'create-profile', 'update-password'].includes(currentPage)
     ? 'auth-login'
     : currentPage;
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 selection:text-white relative">
-      <Toast />
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={activeKey}
-          custom={shouldReduceMotion}
-          variants={pageTransitionVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className="min-h-screen w-full flex flex-col"
-        >
-          {getActiveComponent()}
-        </motion.div>
-      </AnimatePresence>
-    </div>
+    <ThemeProvider>
+      <div className="min-h-screen bg-background text-foreground selection:bg-primary/30 selection:text-white relative">
+        <Toast />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={activeKey}
+            custom={shouldReduceMotion}
+            variants={pageTransitionVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="min-h-screen w-full flex flex-col"
+          >
+            {getActiveComponent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </ThemeProvider>
   );
 }

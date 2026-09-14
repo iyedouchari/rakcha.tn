@@ -22,40 +22,44 @@ export function playIncomingRingtone() {
   initAudio();
   isIncomingPlaying = true;
 
-  incomingOscillator = audioCtx.createOscillator();
-  incomingGain = audioCtx.createGain();
+  try {
+    incomingOscillator = audioCtx.createOscillator();
+    incomingGain = audioCtx.createGain();
 
-  incomingOscillator.type = 'sine';
-  incomingOscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
-  incomingOscillator.frequency.setValueAtTime(480, audioCtx.currentTime); // Dual tone feel
+    incomingOscillator.type = 'sine';
+    incomingOscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
+    incomingOscillator.frequency.setValueAtTime(480, audioCtx.currentTime); // Dual tone feel
 
-  incomingGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    incomingGain.gain.setValueAtTime(0, audioCtx.currentTime);
 
-  // US Ringtone cadence: 2s on, 4s off
-  const loopLength = 6;
-  const loopCount = 100; // loop for a while
+    // US Ringtone cadence: 2s on, 4s off
+    const loopLength = 6;
+    const loopCount = 100; // loop for a while
 
-  for (let i = 0; i < loopCount; i++) {
-    const time = audioCtx.currentTime + i * loopLength;
-    incomingGain.gain.setValueAtTime(0.5, time);
-    incomingGain.gain.setValueAtTime(0, time + 2);
+    for (let i = 0; i < loopCount; i++) {
+      const time = audioCtx.currentTime + i * loopLength;
+      incomingGain.gain.setValueAtTime(0.5, time);
+      incomingGain.gain.setValueAtTime(0, time + 2);
+    }
+
+    incomingOscillator.connect(incomingGain);
+    incomingGain.connect(audioCtx.destination);
+    incomingOscillator.start();
+  } catch (err) {
+    console.warn('[Audio] playIncomingRingtone failed:', err);
+    isIncomingPlaying = false;
   }
-
-  incomingOscillator.connect(incomingGain);
-  incomingGain.connect(audioCtx.destination);
-  incomingOscillator.start();
 }
 
 export function stopIncomingRingtone() {
-  if (!isIncomingPlaying) return;
   isIncomingPlaying = false;
   if (incomingOscillator) {
-    try { incomingOscillator.stop(); } catch(e){}
-    incomingOscillator.disconnect();
+    try { incomingOscillator.stop(); } catch { /* ignore */ }
+    try { incomingOscillator.disconnect(); } catch { /* ignore */ }
     incomingOscillator = null;
   }
   if (incomingGain) {
-    incomingGain.disconnect();
+    try { incomingGain.disconnect(); } catch { /* ignore */ }
     incomingGain = null;
   }
 }
@@ -65,42 +69,46 @@ export function playCallingSound() {
   initAudio();
   isCallingPlaying = true;
 
-  callingOscillator = audioCtx.createOscillator();
-  callingGain = audioCtx.createGain();
+  try {
+    callingOscillator = audioCtx.createOscillator();
+    callingGain = audioCtx.createGain();
 
-  callingOscillator.type = 'sine';
-  callingOscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
-  callingOscillator.frequency.setValueAtTime(480, audioCtx.currentTime);
+    callingOscillator.type = 'sine';
+    callingOscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+    callingOscillator.frequency.setValueAtTime(480, audioCtx.currentTime);
 
-  callingGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    callingGain.gain.setValueAtTime(0, audioCtx.currentTime);
 
-  // EU/UK Ringback tone: 0.4s on, 0.2s off, 0.4s on, 2s off
-  const loopLength = 3;
-  const loopCount = 100;
+    // EU/UK Ringback tone: 0.4s on, 0.2s off, 0.4s on, 2s off
+    const loopLength = 3;
+    const loopCount = 100;
 
-  for (let i = 0; i < loopCount; i++) {
-    const time = audioCtx.currentTime + i * loopLength;
-    callingGain.gain.setValueAtTime(0.1, time);
-    callingGain.gain.setValueAtTime(0, time + 0.4);
-    callingGain.gain.setValueAtTime(0.1, time + 0.6);
-    callingGain.gain.setValueAtTime(0, time + 1.0);
+    for (let i = 0; i < loopCount; i++) {
+      const time = audioCtx.currentTime + i * loopLength;
+      callingGain.gain.setValueAtTime(0.1, time);
+      callingGain.gain.setValueAtTime(0, time + 0.4);
+      callingGain.gain.setValueAtTime(0.1, time + 0.6);
+      callingGain.gain.setValueAtTime(0, time + 1.0);
+    }
+
+    callingOscillator.connect(callingGain);
+    callingGain.connect(audioCtx.destination);
+    callingOscillator.start();
+  } catch (err) {
+    console.warn('[Audio] playCallingSound failed:', err);
+    isCallingPlaying = false;
   }
-
-  callingOscillator.connect(callingGain);
-  callingGain.connect(audioCtx.destination);
-  callingOscillator.start();
 }
 
 export function stopCallingSound() {
-  if (!isCallingPlaying) return;
   isCallingPlaying = false;
   if (callingOscillator) {
-    try { callingOscillator.stop(); } catch(e){}
-    callingOscillator.disconnect();
+    try { callingOscillator.stop(); } catch { /* ignore */ }
+    try { callingOscillator.disconnect(); } catch { /* ignore */ }
     callingOscillator = null;
   }
   if (callingGain) {
-    callingGain.disconnect();
+    try { callingGain.disconnect(); } catch { /* ignore */ }
     callingGain = null;
   }
 }

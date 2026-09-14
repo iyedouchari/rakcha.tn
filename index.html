@@ -69,7 +69,10 @@
     </script>
     <style type="text/tailwindcss">
       @layer base {
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        html {
+          font-size: 90%;
+        }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { @apply bg-surface-container-highest rounded-full; }
         ::-webkit-scrollbar-thumb:hover { @apply bg-surface-bright; }

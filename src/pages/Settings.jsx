@@ -268,6 +268,8 @@ export default function Settings() {
       cameraStreamRef.current = stream;
       if (videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = stream;
+        videoPreviewRef.current.muted = true;
+        videoPreviewRef.current.defaultMuted = true;
       }
       setCameraActive(true);
     } catch (err) {
